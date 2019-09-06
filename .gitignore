@@ -1,0 +1,5 @@
+.idea
+built_data
+output
+*.pyc
+.pytest_cache

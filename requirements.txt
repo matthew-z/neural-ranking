@@ -1,0 +1,6 @@
+matchzoo
+beautifulsoup4
+pandas
+Cython
+pyjnius
+progressbar2
