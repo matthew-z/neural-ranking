@@ -8,8 +8,8 @@ from pyserini.setup import configure_classpath
 configure_classpath(anserini_root)
 from jnius import autoclass
 import pandas as pd
-from dataset.topic_readers import TopicReader, TrecTopicReader
-from dataset.web_extractor import Robust04Extractor, SimpleHTMLExtractor
+from neural_ranking.dataset.topic_readers import TopicReader, TrecTopicReader
+from neural_ranking.dataset.web_extractor import Robust04Extractor, SimpleHTMLExtractor
 import matchzoo as mz
 from functools import lru_cache
 
