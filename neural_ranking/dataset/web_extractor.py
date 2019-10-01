@@ -20,7 +20,6 @@ class SimpleHTMLExtractor():
 
         with multiprocessing.Pool() as p:
             r = list(tqdm.tqdm(p.imap(self, docs, chunksize=16), total=len(docs)))
-
         return r
 
 

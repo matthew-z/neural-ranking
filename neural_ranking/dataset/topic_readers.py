@@ -1,8 +1,24 @@
 import pandas as pd
+import bs4
+
+
+class TopicsBuilder(object):
+    def __init__(self):
+        self.queries = []
+        self.qids = []
+
+    def add(self, query, qid=None):
+        self.queries.append(query)
+        self.qids.append(qid or len(self.qids))
+
+    def to_df(self):
+        return pd.DataFrame({"text_left":self.queries }, index=self.qids)
+
 
 class TopicReader(object):
     def __call__(self, path):
         raise NotImplementedError
+
 
 class TrecTopicReader(TopicReader):
     def __call__(self, path):
@@ -59,3 +75,19 @@ class TrecTopicReader(TopicReader):
 
         # use title only
         return pd.DataFrame({"text_left":queries }, index=topic_ids)
+
+class NtcirTopicReader(TopicReader):
+    def __call__(self, path):
+        with open(path) as fin:
+            soup = bs4.BeautifulSoup(fin)
+        builder = TopicsBuilder()
+
+        raw_queries = soup.find_all("query")
+
+        for q in raw_queries:
+            qid = int(q.find("qid").text)
+            query = q.find("content").text
+
+            builder.add(query, qid)
+
+        return builder.to_df()
