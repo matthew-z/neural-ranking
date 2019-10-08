@@ -12,7 +12,7 @@ class TopicsBuilder(object):
         self.qids.append(qid or len(self.qids))
 
     def to_df(self):
-        return pd.DataFrame({"text_left":self.queries }, index=self.qids)
+        return pd.DataFrame({"text_left":self.queries, "id_left":self.qids }, index=self.qids)
 
 
 class TopicReader(object):
@@ -74,7 +74,7 @@ class TrecTopicReader(TopicReader):
                     next_line_title = False
 
         # use title only
-        return pd.DataFrame({"text_left":queries }, index=topic_ids)
+        return pd.DataFrame({"text_left":queries, "id_left": topic_ids }, index=topic_ids)
 
 class NtcirTopicReader(TopicReader):
     def __call__(self, path):

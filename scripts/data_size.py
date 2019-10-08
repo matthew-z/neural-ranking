@@ -4,11 +4,13 @@ from pathlib import Path
 
 import keras
 import matchzoo as mz
+import tqdm
+from matchzoo.losses import RankHingeLoss
 from matchzoo.preprocessors.units import WordHashing
 
-from neural_ranking.callbacks import EvaluateAllMetrics
 from neural_ranking.embedding.glove import load_glove_embedding
-from neural_ranking.loss import RankHingeLoss
+from neural_ranking.evaluation import EvaluateRankingMetrics, reranking_evalaute
+from neural_ranking.utils import is_dssm_preprocessor, load_rerank_data, get_rerank_packs
 from neural_ranking.utils.common import split_datapack
 
 DATA_FOLDER = Path("~/ir/neural_ranking/built_data/").expanduser()
@@ -17,22 +19,31 @@ DATA_FOLDER = Path("~/ir/neural_ranking/built_data/").expanduser()
 class Runner(object):
     def __init__(self, dataset="robust04", embedding=None, log_path="log"):
         self.dataset = dataset
-        self.pack = mz.load_data_pack(DATA_FOLDER.joinpath(dataset)).shuffle()[:1000]
-        self.train_pack, self.valid_pack, self.test_pack = split_datapack(self.pack)
-        self.model = None
+        self.prepare_data(DATA_FOLDER.joinpath(dataset))
+
         if embedding is None:
             self.raw_embedding = load_glove_embedding(dimension=50, size="6B")
         else:
             self.raw_embedding = embedding
+
         self.log_path = Path(log_path).absolute()
+
+    def prepare_data(self, datapath):
+        pack = mz.load_data_pack(datapath).shuffle()
+        rerank_packs = load_rerank_data(datapath)
+        self.train_pack, valid_pack, test_pack = split_datapack(pack)
+        self.valid_rerank_packs = get_rerank_packs(rerank_packs, valid_pack)
+        self.test_rerank_packs = get_rerank_packs(rerank_packs, test_pack)
 
     def prepare(self, model_cls, preprocessor, params):
         self.preprocessor = preprocessor
         self.model_cls = model_cls
         self.params = params
         self.train_pack_processed = preprocessor.fit_transform(self.train_pack)
-        self.valid_pack_processed = preprocessor.transform(self.valid_pack)
-        self.test_pack_processed = preprocessor.transform(self.test_pack)
+        self.valid_packs_processed = [preprocessor.transform(pack, verbose=0) for pack in
+                                      tqdm.tqdm(self.valid_rerank_packs, desc="processing validation set ")]
+        self.test_packs_processed = [preprocessor.transform(pack, verbose=0) for pack in
+                                     tqdm.tqdm(self.test_rerank_packs, desc="processing test set")]
         self.embedding_matrix = self.raw_embedding.build_matrix(preprocessor.context['vocab_unit'].state['term_index'])
         self.reset_params()
 
@@ -44,26 +55,29 @@ class Runner(object):
         self.model.guess_and_fill_missing_params()
         self.model.build()
         self.model.compile()
-        if not self.is_dssm():
-            self.model.load_embedding_matrix(self.embedding_matrix)
 
-    def is_dssm(self):
-        return isinstance(self.preprocessor, (mz.preprocessors.CDSSMPreprocessor, mz.preprocessors.DSSMPreprocessor))
+        if not is_dssm_preprocessor(self.preprocessor):
+            self.model.load_embedding_matrix(self.embedding_matrix)
 
     def run(self,
             train_ratio=1.0,
-            epochs=30,
+            epochs=10,
             train_gen_mode='pair',
             train_gen_num_dup=5, train_gen_num_neg=1,
             batch_size=64):
-        train_size = int(len(self.train_pack_processed) * train_ratio)
 
-        if self.is_dssm():
+        if is_dssm_preprocessor(self.preprocessor):
             term_index = self.preprocessor.context['vocab_unit'].state['term_index']
-            callbacks = [mz.data_generator.callbacks.LambdaCallback(WordHashing(term_index=term_index))]
+            hashing = WordHashing(term_index=term_index)
+            hashing.__name__ = "word_hashing"
+            callbacks = [
+                mz.data_generator.callbacks.LambdaCallback(
+                    on_batch_data_pack=lambda pack: pack.apply_on_text(hashing.transform, verbose=False, inplace=True))]
+
         else:
             callbacks = None
 
+        train_size = int(len(self.train_pack_processed) * train_ratio)
         train_generator = mz.DataGenerator(
             self.train_pack_processed[:train_size].copy(),
             mode=train_gen_mode,
@@ -72,25 +86,23 @@ class Runner(object):
             batch_size=batch_size,
             callbacks=callbacks
         )
-        # set validation callback
-        valid_x, valid_y = self.valid_pack_processed.unpack()
-        valid_evaluate = EvaluateAllMetrics(self.model, x=valid_x, y=valid_y, batch_size=128)
 
+        valid_evaluate = EvaluateRankingMetrics(self.model, test_packs=self.valid_packs_processed, batch_size=128)
         early_stopping = keras.callbacks.EarlyStopping(monitor='normalized_discounted_cumulative_gain@5(0.0)',
                                                        min_delta=0, patience=5, verbose=1, mode='max',
                                                        baseline=None, restore_best_weights=True)
 
-        history = self.model.fit_generator(train_generator, epochs=epochs, callbacks=[valid_evaluate, early_stopping],
-                                           workers=30, use_multiprocessing=True)
-        model_name = self.model.__class__.__name__.split(".")[-1]
+        history = self.model.fit_generator(train_generator, epochs=epochs,
+                                           workers=30, use_multiprocessing=True,
+                                           callbacks=[valid_evaluate, early_stopping])
 
         # evaluate
-        test_x, test_y = self.test_pack_processed.unpack()
-        evaluate_test = self.model.evaluate(x=test_x, y=test_y)
+        evaluate_test = reranking_evalaute([pack.unpack() for pack in self.test_packs_processed], self.model)
+        model_name = self.model.__class__.__name__.split(".")[-1]
+        history_name = "%s_%s_%.2f.result.pkl" % (model_name, self.dataset, train_ratio)
 
         # write result and history to a file
         result = {"test": evaluate_test, "history": history.history}
-        history_name = "%s_%s_%.2f.result.pkl" % (model_name, self.dataset, train_ratio)
         pickle.dump(result, open(self.log_path.joinpath(history_name), "wb"))
         return result
 
@@ -214,8 +226,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    embedding = load_glove_embedding(300, "840B")
-    for model_fn in [dssm, cdssm]:
+    embedding = load_glove_embedding(50, "6B")
+    for model_fn in [duet, knrm, conv_knrm]:
         print(model_fn)
         runner = Runner(embedding=embedding, log_path=args.log_path, dataset=args.dataset)
         runner.prepare(*(model_fn(runner)))

@@ -5,28 +5,35 @@ import matchzoo as mz
 import numpy as np
 from matchzoo.engine.base_model import BaseModel
 
-def reranking_evalaute(test_dataset, model: BaseModel,
-                 batch_size: int = 128):
-        results = {}
-        for test_x, test_y in test_dataset:
-            result = model.evaluate(test_x, test_y, batch_size)
-            for metric, score in result.items():
-                results.setdefault(metric, [])
-                results[metric].append(score)
+class ReRankDataPack(object):
+    def __init__(self, datapacks):
+        self._datapacks = datapacks
 
-        for metric, scores in results:
-            results[metric] = np.mean(scores)
 
+
+def reranking_evalaute(unpacked_test_packs,
+                       model: BaseModel,
+                       batch_size: int = 128):
+    results = {}
+    for x, y  in unpacked_test_packs:
+        result = model.evaluate(x, y, batch_size)
+        for metric, score in result.items():
+            results.setdefault(metric, [])
+            results[metric].append(score)
+
+    for metric, scores in results.items():
+        results[metric] = np.mean(scores)
+    return results
 
 class EvaluateRankingMetrics(keras.callbacks.Callback):
     def __init__(
-        self,
-        model: 'BaseModel',
-        test_packs: List[mz.DataPack],
-        once_every: int = 1,
-        batch_size: int = 128,
-        model_save_path: str = None,
-        verbose=1
+            self,
+            model: 'BaseModel',
+            test_packs: List[mz.DataPack],
+            once_every: int = 1,
+            batch_size: int = 128,
+            model_save_path: str = None,
+            verbose=1
     ):
         """Initializer."""
         super().__init__()
