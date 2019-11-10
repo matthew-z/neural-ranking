@@ -19,7 +19,13 @@ DATA_FOLDER = Path("~/ir/neural_ranking/built_data/").expanduser()
 class Runner(object):
     def __init__(self, dataset="robust04", embedding=None, log_path="log"):
         self.dataset = dataset
-        self.prepare_data(DATA_FOLDER.joinpath(dataset))
+        datapath = DATA_FOLDER.joinpath(dataset)
+        pack = mz.load_data_pack(datapath).shuffle()
+        rerank_packs = load_rerank_data(datapath)
+        self.train_pack, valid_pack, test_pack = split_datapack(pack)
+        self.valid_rerank_packs = get_rerank_packs(rerank_packs, valid_pack)
+        self.test_rerank_packs = get_rerank_packs(rerank_packs, test_pack)
+
 
         if embedding is None:
             self.raw_embedding = load_glove_embedding(dimension=50, size="6B")
@@ -28,12 +34,6 @@ class Runner(object):
 
         self.log_path = Path(log_path).absolute()
 
-    def prepare_data(self, datapath):
-        pack = mz.load_data_pack(datapath).shuffle()
-        rerank_packs = load_rerank_data(datapath)
-        self.train_pack, valid_pack, test_pack = split_datapack(pack)
-        self.valid_rerank_packs = get_rerank_packs(rerank_packs, valid_pack)
-        self.test_rerank_packs = get_rerank_packs(rerank_packs, test_pack)
 
     def prepare(self, model_cls, preprocessor, params):
         self.preprocessor = preprocessor
@@ -124,7 +124,7 @@ def get_ranking_task(loss=None):
 def conv_knrm(runner):
     model_cls = mz.models.ConvKNRM
     preprocessor = mz.preprocessors.BasicPreprocessor(fixed_length_left=5, fixed_length_right=512,
-                                                      remove_stop_words=True)
+                                                      remove_stop_words=True, multiprocessing=True)
     params = {}
     params['task'] = get_ranking_task()
     params['embedding_output_dim'] = runner.raw_embedding.output_dim
@@ -144,7 +144,7 @@ def conv_knrm(runner):
 def knrm(runner):
     model_cls = mz.models.KNRM
     preprocessor = mz.preprocessors.BasicPreprocessor(fixed_length_left=5, fixed_length_right=512,
-                                                      remove_stop_words=True)
+                                                      remove_stop_words=True, multiprocessing=True)
     params = {}
     params['task'] = get_ranking_task()
     params['embedding_output_dim'] = runner.raw_embedding.output_dim
@@ -198,7 +198,7 @@ def cdssm(runner):
 def duet(runner):
     model_cls = mz.models.DUET
     preprocessor = mz.preprocessors.BasicPreprocessor(fixed_length_left=5, fixed_length_right=512,
-                                                      remove_stop_words=True)
+                                                      remove_stop_words=True, multiprocessing=True)
     params = {}
     params['task'] = get_ranking_task()
     params['embedding_output_dim'] = runner.raw_embedding.output_dim
@@ -220,17 +220,17 @@ def parse_args():
     parser.add_argument("--dataset", type=str, default="robust04")
     parser.add_argument("--log-path", type=path, default="data_size_log")
     args = parser.parse_args()
-
     return args
 
 
 def main():
     args = parse_args()
-    embedding = load_glove_embedding(50, "6B")
+    embedding = load_glove_embedding(300, "840B")
+    # embedding = load_glove_embedding(50, "6B")
     for model_fn in [duet, knrm, conv_knrm]:
         print(model_fn)
         runner = Runner(embedding=embedding, log_path=args.log_path, dataset=args.dataset)
-        runner.prepare(*(model_fn(runner)))
+        runner.prepare()
         for train_size in [0.25, 0.5, .75, 1]:
             print(">>>>>>> Next Phase: train size = %.2f" % train_size)
             runner.run(train_ratio=train_size)
