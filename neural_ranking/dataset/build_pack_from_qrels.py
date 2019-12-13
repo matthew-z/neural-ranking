@@ -1,8 +1,8 @@
 import os
-import sys
+import shutil
+from typing import List
 
 anserini_root = os.environ.get("ANSERINI_HOME", ".")
-sys.path += [os.path.join(anserini_root, 'src/main/python')]
 
 # the following import order matters
 from pyserini.setup import configure_classpath
@@ -13,13 +13,13 @@ from pyserini.search import pysearch
 from functools import lru_cache
 from pathlib import Path
 
-import dill
 import matchzoo as mz
 import pandas as pd
 import tqdm
 from jnius import autoclass
 
-from neural_ranking.dataset.topic_readers import TrecTopicReader, NtcirTopicReader
+from neural_ranking.dataset.topic_readers import TrecTopicReader, \
+    NtcirTopicReader, TopicReader
 
 JString = autoclass('java.lang.String')
 JIndexUtils = autoclass('io.anserini.index.IndexUtils')
@@ -29,17 +29,23 @@ NTCIR_QREL_COLUMNS = ["id_left", "id_right", "label"]
 
 
 class DataBuilder():
-    def __init__(self, index_path, topic_path, qrel_path, columns, topic_reader, searcher_name="bm25", hits=1000):
+    def __init__(self, index_path: Path,
+                 topic_path: Path,
+                 qrel_path: Path,
+                 columns: List[str],
+                 topic_reader: TopicReader,
+                 searcher_name: str = "bm25"):
+
         self.qrel = qrel_path
         self.topic = topic_path
+        index_path = str(index_path)
         self.index_utils = JIndexUtils(JString(index_path))
         self.searcher = pysearch.SimpleSearcher(index_path)
         self._set_searcher(searcher_name)
         self.columns = columns
         self.topic_reader = topic_reader
-        self.hits = hits
 
-    def _set_searcher(self, name):
+    def _set_searcher(self, name: str):
         if name == "bm25":
             self.searcher.set_bm25_similarity(0.9, 0.4)
         elif name == "bm25+rm3":
@@ -48,12 +54,12 @@ class DataBuilder():
         # TODO: implement more searchers
 
     @lru_cache(500000)
-    def _extract_raw_doc(self, doc_id):
+    def _extract_raw_doc(self, doc_id: str):
         # fetch raw document by id
         rawdoc = self.index_utils.getTransformedDocument(JString(doc_id))
         return rawdoc
 
-    def extract_raw_docs(self, doc_ids, verbose=0):
+    def extract_raw_docs(self, doc_ids: List[str], verbose: int = 0):
         docs = []
         ids = []
         for doc_id in tqdm.tqdm(doc_ids, disable=not verbose):
@@ -77,14 +83,16 @@ class DataBuilder():
         print("Topics length: %d" % len(df))
         return df
 
-    def build_datapack(self, output_path):
+    def build_datapack(self, output_path: Path):
         topics_df = self._parse_topics()
         qrel_df = self._parse_qrels()
-        df = qrel_df.join(topics_df, on="id_left", rsuffix="_topics", how="inner")[
+        df = \
+        qrel_df.join(topics_df, on="id_left", rsuffix="_topics", how="inner")[
             ["id_left", "text_left", "id_right", "label"]]
 
         distinct_doc_ids = list(set(df.id_right))
-        retrieved_ids, retrieved_docs = self.extract_raw_docs(distinct_doc_ids, verbose=1)
+        retrieved_ids, retrieved_docs = self.extract_raw_docs(distinct_doc_ids,
+                                                              verbose=1)
 
         doc_df = pd.DataFrame({
             "text_right": retrieved_docs
@@ -93,17 +101,17 @@ class DataBuilder():
         df = df.join(doc_df, on="id_right", how="inner")
 
         datapack = mz.data_pack.pack(df)
-        datapack.save(output_path)
+        datapack.save(output_path.joinpath("train"))
 
         return datapack
 
-    def search(self, query):
-        hits = self.searcher.search(query, k=self.hits)
+    def search(self, query: str, hits=1000):
+        hits = self.searcher.search(query, k=hits)
         doc_ids = [h.docid for h in hits]
         doc_ids, contents = self.extract_raw_docs(doc_ids, verbose=0)
         return doc_ids, contents
 
-    def build_rerank_datapack(self, output_path: str):
+    def build_rerank_datapack(self, output_path: Path, hits=1000):
         topics_df = self._parse_topics()
         qrel_df = self._parse_qrels()
 
@@ -112,62 +120,58 @@ class DataBuilder():
             row = qrel_df.iloc[i]
             rel_dict.setdefault(row.id_left, {})
             rel_dict[row.id_left][row.id_right] = row.label
-        packs = []
+
+        relation = []
+        text_left = []
+        text_right = []
+        id_left = []
+        id_right = []
 
         for i in tqdm.tqdm(range(len(topics_df))):
             row = topics_df.iloc[i]
-            doc_ids, doc_contents = self.search(row.text_left)
+            doc_ids, doc_contents = self.search(row.text_left, hits=hits)
 
-            text_left = [row.text_left for _ in doc_ids]
-            id_left = [row.id_left for _ in doc_ids]
-            relation = []
+            text_left.extend([row.text_left for _ in doc_ids])
+            id_left.extend([row.id_left for _ in doc_ids])
+
+            id_right.extend(doc_ids)
+            text_right.extend(doc_contents)
 
             for doc_id in doc_ids:
                 r = rel_dict.get(row.id_left, {}).get(doc_id, 0)
                 relation.append(r)
 
-            pack = mz.data_pack.pack(pd.DataFrame(data={
-                "label": relation,
-                "text_right": doc_contents,
-                "text_left": text_left,
-                "id_left": id_left,
-                "id_right": doc_ids
-
-            }))
-
-            assert len(pack) !=0
-            packs.append(pack)
-
-        save(packs, output_path, data_filename="rerank.dill")
-        return packs
+        pack = mz.data_pack.pack(pd.DataFrame(data={
+            "label": relation,
+            "text_right": text_right,
+            "text_left": text_left,
+            "id_left": id_left,
+            "id_right": id_right
+        }))
+        pack.save(output_path.joinpath("rerank.%d" % hits))
+        return pack
 
 
 class TrecDataBuilder(DataBuilder):
-    def __init__(self, index_path, topic_path, qrel_path):
-        super().__init__(index_path, topic_path, qrel_path, TREC_QREL_COLUMNS, TrecTopicReader())
+    def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
+        super().__init__(index_path, topic_path, qrel_path, TREC_QREL_COLUMNS,
+                         TrecTopicReader())
 
 
 class NtcirDataBuilder(DataBuilder):
-    def __init__(self, index_path, topic_path, qrel_path):
-        super().__init__(index_path, topic_path, qrel_path, NTCIR_QREL_COLUMNS, NtcirTopicReader())
+    def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
+        super().__init__(index_path, topic_path, qrel_path, NTCIR_QREL_COLUMNS,
+                         NtcirTopicReader())
 
 
 def path(str):
-    return os.path.abspath((os.path.expanduser(str)))
+    return Path(os.path.abspath((os.path.expanduser(str))))
 
 
-def save(obj, dirpath, data_filename="data.dill"):
-    dirpath = Path(dirpath)
-    data_file_path = dirpath.joinpath(data_filename)
-
-    if data_file_path.exists():
-        raise FileExistsError(
-            f'{data_file_path} already exist, fail to save')
-    elif not dirpath.exists():
-        dirpath.mkdir()
-
-    dill.dump(obj, open(data_file_path, mode='wb'))
-
+def copy_qrel_and_topics(topics_path: Path, qrels_path: Path,
+                         output_path: Path):
+    shutil.copyfile(qrels_path, output_path.joinpath("qrels"))
+    shutil.copy(topics_path, output_path.joinpath("topics"))
 
 if __name__ == "__main__":
     import argparse
@@ -177,8 +181,10 @@ if __name__ == "__main__":
     parser.add_argument("--index", type=path)
     parser.add_argument("--qrel", type=path)
     parser.add_argument("--topic", type=path)
-    parser.add_argument("--format", type=str, default='trec', choices=["trec", "ntcir"])
-    parser.add_argument("--output", type=path, default="./built_data/my-data-pack")
+    parser.add_argument("--format", type=str, default='trec',
+                        choices=["trec", "ntcir"])
+    parser.add_argument("--output", type=path,
+                        default="./built_data/my-data-pack")
     parser.add_argument("--hits", type=int, default=1000)
     args = parser.parse_args()
 
@@ -189,5 +195,6 @@ if __name__ == "__main__":
     else:
         raise ValueError
 
-    # builder.build_datapack(args.output)
-    builder.build_rerank_datapack(args.output)
+    builder.build_datapack(args.output)
+    builder.build_rerank_datapack(args.output, args.hits)
+    copy_qrel_and_topics(args.topic, args.qrel, args.output)

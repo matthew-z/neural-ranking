@@ -1,6 +1,4 @@
-from neural_ranking.embedding.embedding import TokenEmbedding
 from pathlib import Path
-import keras
 import matchzoo as mz
 
 
@@ -18,21 +16,20 @@ def load_glove_embedding(dimension: int = 50, size="6B") -> mz.embedding.Embeddi
     """
     file_name = 'glove.{}.{}d.txt'.format(size, dimension)
     file_path = (Path(mz.USER_DATA_DIR) / 'glove').joinpath(file_name)
-    if size == "6B":
-        if not file_path.exists():
-            keras.utils.data_utils.get_file('glove_embedding',
-                                            _glove_6B_embedding_url,
-                                            extract=True,
-                                            cache_dir=mz.USER_DATA_DIR,
-                                            cache_subdir='glove')
 
-    elif size == "840B":
-        if not file_path.exists():
-            keras.utils.data_utils.get_file('glove_embedding',
-                                            _glove_840B_embedding_url,
-                                            extract=True,
-                                            cache_dir=mz.USER_DATA_DIR,
-                                            cache_subdir='glove')
+    if not file_path.exists():
+        if size=="6B":
+            url = _glove_6B_embedding_url
+        elif size == "840B":
+            url = _glove_840B_embedding_url
+        else:
+            raise ValueError("Incorrect Size for GloVe: %d" % size)
+
+        mz.utils.get_file('glove_embedding',
+                                        url,
+                                        extract=True,
+                                        cache_dir=mz.USER_DATA_DIR,
+                                        cache_subdir='glove')
 
     return mz.embedding.load_from_file(file_path=str(file_path), mode='glove')
 

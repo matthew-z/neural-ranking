@@ -21,11 +21,7 @@ def load_rerank_data(path):
     packs = dill.load(open(os.path.join(path, "rerank.dill"), "rb"))
     return packs
 
-
-def get_rerank_packs(rerank_packs, test_pack):
-    test_left_ids = set(test_pack.left.index)
-    test_rerank_packs = []
-    for pack in rerank_packs:
-        if pack.left.index[0] in test_left_ids:
-            test_rerank_packs.append(pack)
-    return test_rerank_packs
+def input_check():
+    user_input = input("Continue? ")
+    while user_input.strip().lower() != "y":
+        user_input = input("Continue? ")

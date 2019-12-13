@@ -1,6 +1,5 @@
-matchzoo
+matchzoo-py
 beautifulsoup4
 pandas
-Cython
-pyjnius
+pyserini
 tqdm
