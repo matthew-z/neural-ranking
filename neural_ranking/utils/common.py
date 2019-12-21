@@ -1,12 +1,19 @@
 import random
 from sklearn.model_selection import KFold
 
-def slice_datapack_by_left_ids(datapack, left_ids):
+def slice_datapack_by_left_ids(datapack, left_ids, verbose=0):
     r = datapack.relation
     d = datapack.copy()
     d.relation = r[r["id_left"].isin(left_ids)].reset_index(drop=1)
-    d._left = d._left.loc[left_ids]
 
+    original_index = set(d._left.index)
+
+    if verbose:
+        for idx in left_ids:
+            if idx not in original_index:
+                print("topic %d not found in datapack" % idx)
+
+    d._left = d._left.reindex(left_ids)
     return d
 
 
