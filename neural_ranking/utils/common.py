@@ -5,7 +5,6 @@ def slice_datapack_by_left_ids(datapack, left_ids, verbose=0):
     r = datapack.relation
     d = datapack.copy()
     d.relation = r[r["id_left"].isin(left_ids)].reset_index(drop=1)
-
     original_index = set(d._left.index)
 
     if verbose:
@@ -14,6 +13,8 @@ def slice_datapack_by_left_ids(datapack, left_ids, verbose=0):
                 print("topic %d not found in datapack" % idx)
 
     d._left = d._left.reindex(left_ids)
+    valid_doc_ids = sorted(list(set(d.relation.id_right)))
+    d._right = d.right.reindex(valid_doc_ids)
     return d
 
 

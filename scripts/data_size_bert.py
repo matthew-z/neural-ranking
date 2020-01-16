@@ -2,10 +2,10 @@ import logging
 import os
 import pickle
 
-from transformers import AdamW
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 import matchzoo as mz
-from neural_ranking.matchzoo_helper import Runner, KFoldRerankDataset
+from neural_ranking.matchzoo_helper import Runner, ReRankDataset
 
 
 def path(str):
@@ -22,6 +22,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
 def bert_optimizer_fn(model):
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -36,29 +37,36 @@ def bert_optimizer_fn(model):
 
 def main():
     args = parse_args()
-    embedding = mz.embedding.GloVe(dim=50, name="6B")
-    # embedding = mz.embedding.GloVe(dim=300, name="840B")
-    dataset = KFoldRerankDataset(args.dataset, rerank_hits=100, test=args.test)
-    runner = Runner(embedding=embedding,
+    dataset = ReRankDataset(args.dataset, rerank_hits=1000, test=args.test)
+    runner = Runner(embedding=None,
                     log_path=args.log_path,
                     dataset=dataset,
                     fp16=args.fp16)
     scores = {}
-    model_classes = [mz.models.MatchLSTM, mz.models.KNRM]
-    ratios = [1, 0.75, 0.5, 0.25]
+    model_classes = [mz.models.Bert]
+    ratios = [1]
 
     for model_class in model_classes:
         for train_ratio in ratios:
-            print("Prepare for %s Model" % model_class)
+            print("Prepare for %s Model" % model_class.__name__)
             runner.prepare(model_class, update_preprocessor=False)
             print(">>>>>>> Train ratio = %.2f" % train_ratio)
+            batch_size = 8
 
-            score = runner.train_kfold(train_ratio=train_ratio, batch_size=8, epochs=50, patience=3)
+            scheduler_fn = lambda optimizer: get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=6,
+                num_training_steps=runner.dataset.train_pack_positive_num / batch_size)
+            optimizer_fn = bert_optimizer_fn
+
+            score = runner.train_kfold(train_ratio=train_ratio, batch_size=8, epochs=50, patience=3,
+                                       fold_num=1,
+                                       optimizer_fn=optimizer_fn, scheduler_fn=scheduler_fn)
 
             scores.setdefault(model_class, {})
             scores[model_class][train_ratio] = score
 
     pickle.dump(scores, open("logs/data_size_result.json", "wb"))
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
