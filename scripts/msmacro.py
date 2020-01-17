@@ -1,20 +1,21 @@
-import os
 from pathlib import Path
 
 import numpy as np
-import pytorch_lightning as pl
 import torch
 import transformers
-from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader, DistributedSampler
+from transformers import get_linear_schedule_with_warmup
 
 import matchzoo as mz
+import pytorch_lightning as pl
 from neural_ranking.dataset.msmacro import MsMacroTriplesDataset, MsMacroReRankDataset
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import EarlyStopping
 
 
 class MsMacro(pl.LightningModule):
 
-    def __init__(self, ms_macro_path, bert_model="bert-base-uncased"):
+    def __init__(self, ms_macro_path, bert_model="bert-base-uncased", distributed=False, batch_size=6):
         super().__init__()
         self.bert_model = bert_model
         self.model = transformers.BertForSequenceClassification.from_pretrained(bert_model, num_labels=1)
@@ -27,7 +28,9 @@ class MsMacro(pl.LightningModule):
         }
         self.main_metric_name = "ndcg@10"
         self.ms_macro_path = ms_macro_path
-        self.batch_size = 6
+        self.batch_size = batch_size
+        self.distributed = distributed
+        self._s = None
 
     def forward(self, x):
         logits = self.model(**x)[0]
@@ -55,44 +58,68 @@ class MsMacro(pl.LightningModule):
 
         result = {}
         for topic_id, y in topics.items():
+            y_true = torch.cat(y["true"])
+            y_pred = torch.cat(y["pred"])
             for metric_name, metric_fn in self.metrics.items():
                 result.setdefault(metric_name, [])
-                result[metric_name].append(metric_fn(y_true=y["true"], y_pred=y["pred"]))
+                result[metric_name].append(metric_fn(y_true=y_true, y_pred=y_pred))
 
         for metric_name, values in result.items():
             result[metric_name] = np.mean(values)
-        return {'log': result}
+
+        val_ndcg10 = result["ndcg@10"]
+        return {'log': result, 'ndcg@10': val_ndcg10}
 
     def configure_optimizers(self):
         # REQUIRED
         # can return multiple optimizers and learning_rate schedulers
         # (LBFGS it is automatically supported, no need for closure function)
-        return transformers.AdamW(self.parameters())
-
+        lr = 1e-3
+        num_training_steps = len(self.train_dataloader())
+        num_warmup_steps = 1000
+        optimizer = transformers.AdamW(self.parameters(), lr=lr)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=num_warmup_steps,
+                                                    num_training_steps=num_training_steps)
+        return [optimizer], [scheduler]
     @pl.data_loader
     def train_dataloader(self):
         # REQUIRED
-        triples_path = os.path.join(self.ms_macro_path, "triples.tsv")
-        dataset = MsMacroTriplesDataset(triples_path)
-        sampler = DistributedSampler(dataset)
+        dataset = MsMacroTriplesDataset(self.ms_macro_path)
+        sampler = DistributedSampler(dataset) if self.distributed else None
         return DataLoader(dataset, batch_size=self.batch_size, sampler=sampler,
-                          num_workers=8, collate_fn=MsMacroTriplesDataset.Collater(self.bert_model))
+                          collate_fn=MsMacroTriplesDataset.Collater(self.bert_model),
+                          shuffle=True if not sampler else None,
+                          num_workers=4
+                          )
 
     @pl.data_loader
     def val_dataloader(self):
         # OPTIONAL
         dataset = MsMacroReRankDataset(self.ms_macro_path)
-        sampler = DistributedSampler(dataset)
+        sampler = DistributedSampler(dataset, shuffle=False) if self.distributed else None
         return DataLoader(dataset, batch_size=self.batch_size, sampler=sampler,
-                          num_workers=8, collate_fn=MsMacroReRankDataset.Collater(self.bert_model))
+                          collate_fn=MsMacroReRankDataset.Collater(self.bert_model),
+                          num_workers=4)
 
 
 def main():
+    early_stop_callback = EarlyStopping(
+        monitor='ndcg@10',
+        patience=3,
+        verbose=True,
+        mode='min'
+    )
+
     ms_macro_path = Path("~/ir/collection/ms-macro/document").expanduser()
-    model = MsMacro(ms_macro_path)
-    # most basic trainer, uses good defaults
-    trainer = Trainer(max_nb_epochs=1, val_check_interval=500, gpus=-1, distributed_backend="ddp", use_amp=True,
-                      amp_level="O2")
+    trainer = Trainer(min_nb_epochs=5, max_nb_epochs=10, gpus=[1, 2],
+                      gradient_clip_val=1, overfit_pct=0.001, distributed_backend="ddp", use_amp=True, amp_level="O3",
+                      early_stop_callback=early_stop_callback)
+
+    model = MsMacro(ms_macro_path, batch_size=4, distributed=trainer.distributed_backend == "ddp")
+
+    # trainer = Trainer(max_nb_epochs=10,  gpus=-1, distributed_backend="ddp",
+    #                   gradient_clip_val=1, overfit_pct=0.0001,
+    #                   amp_level="O2", use_amp=True, early_stop_callback=early_stop_callback)
     trainer.fit(model)
 
 
