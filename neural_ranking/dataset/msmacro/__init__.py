@@ -1,1 +1,1 @@
-from .msmacro import MsMacroReRankDataset, MsMacroTriplesDataset
+from .document import MsMacroDocReRankDataset, MsMacroDocTriplesDataset
