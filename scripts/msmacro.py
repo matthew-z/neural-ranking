@@ -17,7 +17,6 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.logging import TensorBoardLogger
 
-
 class MRRk():
     def __init__(self, k, threshold=0):
         self.k = k
@@ -25,6 +24,13 @@ class MRRk():
 
     def __call__(self, y_true, y_pred):
         return self.metric(y_true=y_true[:self.k], y_pred=y_pred[:self.k])
+
+
+def export_preds(outputs):
+    ranks = {}
+    for topic_id, doc_id, y_pred in outputs:
+        ranks.setdefault(topic_id)
+
 
 
 class ReRankSampler(DistributedSampler):
@@ -169,7 +175,7 @@ class MsMacro(pl.LightningModule):
                                                     num_training_steps=num_training_steps)
 
         reduce_lr = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", patience=1,
-                                                               factor=0.1, threshold=0.05,
+                                                               factor=0.5, threshold=0.05,
                                                                threshold_mode="abs")
         return [optimizer], [scheduler, reduce_lr]
 
@@ -211,15 +217,16 @@ def main():
     args = parser.parse_args()
 
     monitor = "mrr"
-    os.makedirs(os.path.join(os.getcwd(), 'msmacro_log'), exist_ok=True)
+    project_folder = os.path.join(os.getcwd(), 'msmacro_log')
+    os.makedirs(project_folder, exist_ok=True)
 
     logger = TensorBoardLogger(
-        save_dir=os.getcwd(),
-        name='msmacro_log',
+        save_dir=project_folder,
+        name='bert_base_uncased',
     )
     early_stop_callback = EarlyStopping(
         monitor=monitor,
-        patience=3,
+        patience=5,
         verbose=True,
         mode='max'
     )

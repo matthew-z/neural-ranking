@@ -18,12 +18,13 @@ import pandas as pd
 import tqdm
 from jnius import autoclass
 
-from neural_ranking.dataset.topic_readers import TrecTopicReader, \
+from neural_ranking.data.topic_readers import TrecRobustTopicReader, \
     NtcirTopicReader, TopicReader
 
 JString = autoclass('java.lang.String')
 JIndexUtils = autoclass('io.anserini.index.IndexUtils')
 
+TREC_PREL_COLUMNS = ["id_left", "id_right", "label", "algo", "prob"]
 TREC_QREL_COLUMNS = ["id_left", "intent", "id_right", "label"]
 NTCIR_QREL_COLUMNS = ["id_left", "id_right", "label"]
 
@@ -155,8 +156,12 @@ class DataBuilder():
 class TrecDataBuilder(DataBuilder):
     def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
         super().__init__(index_path, topic_path, qrel_path, TREC_QREL_COLUMNS,
-                         TrecTopicReader())
+                         TrecRobustTopicReader())
 
+class TrecPRELBuilder(DataBuilder):
+    def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
+        super().__init__(index_path, topic_path, qrel_path, TREC_PREL_COLUMNS,
+                         TrecRobustTopicReader())
 
 class NtcirDataBuilder(DataBuilder):
     def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
@@ -173,6 +178,7 @@ def copy_qrel_and_topics(topics_path: Path, qrels_path: Path,
     shutil.copyfile(qrels_path, output_path.joinpath("qrels"))
     shutil.copy(topics_path, output_path.joinpath("topics"))
 
+
 if __name__ == "__main__":
     import argparse
 
@@ -185,6 +191,8 @@ if __name__ == "__main__":
                         choices=["trec", "ntcir"])
     parser.add_argument("--output", type=path,
                         default="./built_data/my-data-pack")
+    parser.add_argument("--filter", type=path)
+
     parser.add_argument("--hits", type=int, default=1000)
     args = parser.parse_args()
 

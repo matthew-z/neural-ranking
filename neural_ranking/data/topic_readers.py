@@ -19,8 +19,27 @@ class TopicReader(object):
     def __call__(self, path):
         raise NotImplementedError
 
+class TrecXmlTopicReader(TopicReader):
+    def __call__(self, path, query_or_description="query"):
+        topic_ids = []
+        queries = []
+        soup = bs4.BeautifulSoup(open(path))
+        topics = soup.find_all("topic")
+        for topic in topics:
+            qid = int(topic.attrs["number"])
+            query = topic.find("query").text
+            description = topic.find("description").text
 
-class TrecTopicReader(TopicReader):
+            topic_ids.append(qid)
+            queries.append(query)
+
+        # use title only
+        return pd.DataFrame({"text_left":queries, "id_left": topic_ids },
+                            index=topic_ids)
+
+
+
+class TrecRobustTopicReader(TopicReader):
     def __call__(self, path):
         topic_ids = []
         descriptions = []
