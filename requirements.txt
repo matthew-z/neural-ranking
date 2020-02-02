@@ -1,5 +1,7 @@
 matchzoo-py
 beautifulsoup4
+transformers
 pandas
 pyserini
 tqdm
+sklearn

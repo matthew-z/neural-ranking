@@ -1,9 +1,15 @@
 import random
+
 from sklearn.model_selection import KFold
+
 
 def slice_datapack_by_left_ids(datapack, left_ids, verbose=0):
     r = datapack.relation
     d = datapack.copy()
+
+    if not left_ids:
+        return d
+
     d.relation = r[r["id_left"].isin(left_ids)].reset_index(drop=1)
     original_index = set(d._left.index)
 
@@ -35,10 +41,13 @@ def split_topics(pack, valid_size=0.2, test_size=0.2, shuffle=True, seed=None):
         random.shuffle(topics)
 
     train_topics = topics[:num_train]
-    valid_topics = topics[num_train:num_train + num_valid]
-    test_topics = topics[num_train + num_valid:]
+    if test_size > 0:
+        valid_topics = topics[num_train:num_train + num_valid]
+        test_topics = topics[num_train + num_valid:]
+        return train_topics, valid_topics, test_topics
 
-    return train_topics, valid_topics, test_topics
+    valid_topics = topics[num_train:]
+    return train_topics, valid_topics
 
     #
     # train_pack = slice_datapack_by_left_ids(pack, train_topics)

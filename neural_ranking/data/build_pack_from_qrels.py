@@ -1,3 +1,4 @@
+import argparse
 import os
 import shutil
 from typing import List
@@ -19,7 +20,7 @@ import tqdm
 from jnius import autoclass
 
 from neural_ranking.data.topic_readers import TrecRobustTopicReader, \
-    NtcirTopicReader, TopicReader
+    NtcirTopicReader, TopicReader, TrecXmlTopicReader
 
 JString = autoclass('java.lang.String')
 JIndexUtils = autoclass('io.anserini.index.IndexUtils')
@@ -63,7 +64,7 @@ class DataBuilder():
     def extract_raw_docs(self, doc_ids: List[str], verbose: int = 0):
         docs = []
         ids = []
-        for doc_id in tqdm.tqdm(doc_ids, disable=not verbose):
+        for doc_id in tqdm.tqdm(doc_ids, disable=not verbose, desc="Extracting Raw Docs"):
             try:
                 d = self._extract_raw_doc(doc_id)
                 docs.append(d)
@@ -80,16 +81,16 @@ class DataBuilder():
 
     def _parse_topics(self):
         df = self.topic_reader(self.topic)
-        print(df.columns)
         print("Topics length: %d" % len(df))
         return df
 
     def build_datapack(self, output_path: Path):
         topics_df = self._parse_topics()
         qrel_df = self._parse_qrels()
-        df = \
-        qrel_df.join(topics_df, on="id_left", rsuffix="_topics", how="inner")[
+        df = qrel_df.join(topics_df, on="id_left", rsuffix="_topics", how="inner")[
             ["id_left", "text_left", "id_right", "label"]]
+
+        qrel_len = len(df)
 
         distinct_doc_ids = list(set(df.id_right))
         retrieved_ids, retrieved_docs = self.extract_raw_docs(distinct_doc_ids,
@@ -101,8 +102,11 @@ class DataBuilder():
 
         df = df.join(doc_df, on="id_right", how="inner")
 
+        extracted_qrel_len = len(df)
+
         datapack = mz.data_pack.pack(df)
         datapack.save(output_path.joinpath("train"))
+        print("Qrel Size: %d, Extracted: %d" %(qrel_len, extracted_qrel_len))
 
         return datapack
 
@@ -128,7 +132,7 @@ class DataBuilder():
         id_left = []
         id_right = []
 
-        for i in tqdm.tqdm(range(len(topics_df))):
+        for i in tqdm.tqdm(range(len(topics_df)), desc="Building Rerank DataPack"):
             row = topics_df.iloc[i]
             doc_ids, doc_contents = self.search(row.text_left, hits=hits)
 
@@ -158,10 +162,10 @@ class TrecDataBuilder(DataBuilder):
         super().__init__(index_path, topic_path, qrel_path, TREC_QREL_COLUMNS,
                          TrecRobustTopicReader())
 
-class TrecPRELBuilder(DataBuilder):
+class TrecXmlBuilder(DataBuilder):
     def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
-        super().__init__(index_path, topic_path, qrel_path, TREC_PREL_COLUMNS,
-                         TrecRobustTopicReader())
+        super().__init__(index_path, topic_path, qrel_path, TREC_QREL_COLUMNS,
+                         TrecXmlTopicReader())
 
 class NtcirDataBuilder(DataBuilder):
     def __init__(self, index_path: Path, topic_path: Path, qrel_path: Path):
@@ -180,15 +184,13 @@ def copy_qrel_and_topics(topics_path: Path, qrels_path: Path,
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--index", type=path)
     parser.add_argument("--qrel", type=path)
     parser.add_argument("--topic", type=path)
-    parser.add_argument("--format", type=str, default='trec',
-                        choices=["trec", "ntcir"])
+    parser.add_argument("--topic-format", type=str, default='trec',
+                        choices=["trec", "ntcir", "xml"])
     parser.add_argument("--output", type=path,
                         default="./built_data/my-data-pack")
     parser.add_argument("--filter", type=path)
@@ -196,13 +198,16 @@ if __name__ == "__main__":
     parser.add_argument("--hits", type=int, default=1000)
     args = parser.parse_args()
 
-    if args.format == "trec":
+    if args.topic_format == "trec":
         builder = TrecDataBuilder(args.index, args.topic, args.qrel)
-    elif args.format == "ntcir":
+    elif args.topic_format == "ntcir":
         builder = NtcirDataBuilder(args.index, args.topic, args.qrel)
+    elif args.topic_format == "xml":
+        builder = TrecXmlBuilder(args.index, args.topic, args.qrel)
     else:
         raise ValueError
 
     builder.build_datapack(args.output)
     builder.build_rerank_datapack(args.output, args.hits)
+
     copy_qrel_and_topics(args.topic, args.qrel, args.output)

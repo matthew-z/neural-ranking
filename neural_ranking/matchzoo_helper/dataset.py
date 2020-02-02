@@ -39,14 +39,19 @@ class ReRankDataset(object):
         self.rerank_pack_processed = preprocessor.transform(
             self.rerank_pack)
 
-    def set_topic_splits(self, topic_splits=None, dev_ratio=0.2, seed=None):
+    def init_topic_splits(self, topic_splits=None, dev_ratio=0.2, test_ratio=0.2, seed=None):
 
         if not topic_splits:
-            topic_splits = split_topics(self.pack, seed=seed)
+            topic_splits = split_topics(self.pack, valid_size=dev_ratio, test_size=test_ratio, seed=seed)
 
         if len(topic_splits) == 2:
-            train_topics, self.test_topics = topic_splits
-            self.train_topics, self.dev_topics = train_test_split(train_topics, test_size=dev_ratio, random_state=seed)
+            if test_ratio > 0:
+                train_topics, self.test_topics = topic_splits
+                self.train_topics, self.dev_topics = train_test_split(train_topics,
+                                                                      test_size=dev_ratio, random_state=seed)
+            else:
+                self.train_topics, self.dev_topics = topic_splits
+                self.test_topics = []
         elif len(topic_splits) == 3:
             self.train_topics, self.dev_topics, self.test_topics = topic_splits
         else:
@@ -76,7 +81,7 @@ class ReRankDataset(object):
 class KFoldRerankDataset(ReRankDataset):
     def set_kfold_splits(self, fold_index=0, k=5, seed=None):
         fold = self.get_kfold_splits(k, seed=seed)[fold_index]
-        self.set_topic_splits(fold, seed=seed)
+        self.init_topic_splits(fold, seed=seed)
 
     def _get_predefined_kfold_splits(self):
         if self.dataset == "robust04":

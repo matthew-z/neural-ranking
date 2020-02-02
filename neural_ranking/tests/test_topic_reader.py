@@ -21,11 +21,11 @@ class TestTrecTopicReader(TestCase):
     def test_web(self):
         reader = TrecXmlTopicReader()
 
-        df = reader("../resources/topics_and_qrels/topics.web.1-50.txt")
+        df = reader("../resources/topics_and_qrels/topics.web.1-300.txt")
 
         self.assertSequenceEqual([1, 2], df.index.tolist()[:2])
         self.assertSequenceEqual(["obama family tree", "french lick resort and casino"],
                                  df["text_left"].tolist()[:2])
-        self.assertSequenceEqual([49, 50], df.index.tolist()[-2:])
-        self.assertSequenceEqual(["flame designs", "dog heat"],
+        self.assertSequenceEqual([299, 300], df.index.tolist()[-2:])
+        self.assertSequenceEqual(["pink slime in ground beef", "how to find the mean"],
                                  df["text_left"].tolist()[-2:])
