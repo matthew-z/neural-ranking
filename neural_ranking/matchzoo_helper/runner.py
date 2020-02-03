@@ -27,11 +27,11 @@ class Runner(object):
         self.checkpoint_path = Path(checkpoint_path).absolute()
         self.log_path = Path(log_path).absolute()
 
-    def prepare(self, model_class, task=None, update_preprocessor=True, preprocessor=None, config=None):
+    def prepare(self, model_class, task=None, preprocessor=None, force_update_preprocessor=True, config=None):
         self.model_class = model_class
         self.run_name = None
         preprocessor = preprocessor or self.model_class.get_default_preprocessor()
-        update_preprocessor = update_preprocessor or type(self.preprocessor) != type(preprocessor)
+        update_preprocessor = force_update_preprocessor or type(self.preprocessor) != type(preprocessor)
 
         (self.model,
          self.preprocessor,

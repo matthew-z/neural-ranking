@@ -1,4 +1,4 @@
-import argparse
+import numpy as np
 import os
 import shutil
 from typing import List
@@ -84,24 +84,26 @@ class DataBuilder():
         print("Topics length: %d" % len(df))
         return df
 
-    def build_datapack(self, output_path: Path):
+    def build_datapack(self, output_path: Path, filter_topic_ids=None):
         topics_df = self._parse_topics()
         qrel_df = self._parse_qrels()
         df = qrel_df.join(topics_df, on="id_left", rsuffix="_topics", how="inner")[
             ["id_left", "text_left", "id_right", "label"]]
 
+        if filter_topic_ids:
+            filter_topic_ids = np.asarray(filter_topic_ids, dtype=df["id_left"].dtype)
+            n_topics = len(set(df["id_left"]))
+            df = df[~df["id_left"].isin(filter_topic_ids)]
+            n_topics_filtered =  n_topics - len(set(df["id_left"]))
+            print("Expected to filter %d topics, Filtered %d topics" % (len(filter_topic_ids), n_topics_filtered))
+
         qrel_len = len(df)
-
         distinct_doc_ids = list(set(df.id_right))
-        retrieved_ids, retrieved_docs = self.extract_raw_docs(distinct_doc_ids,
-                                                              verbose=1)
-
+        retrieved_ids, retrieved_docs = self.extract_raw_docs(distinct_doc_ids,verbose=1)
         doc_df = pd.DataFrame({
             "text_right": retrieved_docs
         }, index=retrieved_ids)
-
         df = df.join(doc_df, on="id_right", how="inner")
-
         extracted_qrel_len = len(df)
 
         datapack = mz.data_pack.pack(df)
@@ -182,32 +184,32 @@ def copy_qrel_and_topics(topics_path: Path, qrels_path: Path,
     shutil.copyfile(qrels_path, output_path.joinpath("qrels"))
     shutil.copy(topics_path, output_path.joinpath("topics"))
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--index", type=path)
-    parser.add_argument("--qrel", type=path)
-    parser.add_argument("--topic", type=path)
-    parser.add_argument("--topic-format", type=str, default='trec',
-                        choices=["trec", "ntcir", "xml"])
-    parser.add_argument("--output", type=path,
-                        default="./built_data/my-data-pack")
-    parser.add_argument("--filter", type=path)
-
-    parser.add_argument("--hits", type=int, default=1000)
-    args = parser.parse_args()
-
-    if args.topic_format == "trec":
-        builder = TrecDataBuilder(args.index, args.topic, args.qrel)
-    elif args.topic_format == "ntcir":
-        builder = NtcirDataBuilder(args.index, args.topic, args.qrel)
-    elif args.topic_format == "xml":
-        builder = TrecXmlBuilder(args.index, args.topic, args.qrel)
-    else:
-        raise ValueError
-
-    builder.build_datapack(args.output)
-    builder.build_rerank_datapack(args.output, args.hits)
-
-    copy_qrel_and_topics(args.topic, args.qrel, args.output)
+#
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#
+#     parser.add_argument("--index", type=path)
+#     parser.add_argument("--qrel", type=path)
+#     parser.add_argument("--topic", type=path)
+#     parser.add_argument("--topic-format", type=str, default='trec',
+#                         choices=["trec", "ntcir", "xml"])
+#     parser.add_argument("--output", type=path,
+#                         default="./built_data/my-data-pack")
+#     parser.add_argument("--filter", type=path)
+#
+#     parser.add_argument("--hits", type=int, default=1000)
+#     args = parser.parse_args()
+#
+#     if args.topic_format == "trec":
+#         builder = TrecDataBuilder(args.index, args.topic, args.qrel)
+#     elif args.topic_format == "ntcir":
+#         builder = NtcirDataBuilder(args.index, args.topic, args.qrel)
+#     elif args.topic_format == "xml":
+#         builder = TrecXmlBuilder(args.index, args.topic, args.qrel)
+#     else:
+#         raise ValueError
+#
+#     builder.build_datapack(args.output)
+#     builder.build_rerank_datapack(args.output, args.hits)
+#
+#     copy_qrel_and_topics(args.topic, args.qrel, args.output)

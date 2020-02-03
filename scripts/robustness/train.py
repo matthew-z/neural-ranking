@@ -5,6 +5,7 @@ import pickle
 from transformers import AdamW
 
 import matchzoo as mz
+from neural_ranking.matchzoo_helper.dataset import ReRankDataset
 from neural_ranking.matchzoo_helper.runner import Runner
 
 
@@ -24,16 +25,16 @@ def main():
     args = parse_args()
     embedding = mz.embedding.GloVe(dim=50, name="6B")
     dataset = ReRankDataset(args.dataset, rerank_hits=100, test=args.test)
+    dataset.init_topic_splits(dev_ratio=0.2, test_ratio=0, seed=2020)
     runner = Runner(embedding=embedding,
                     log_path=args.log_path,
                     dataset=dataset,
                     fp16=args.fp16)
 
-    model_classes = [mz.models.MatchLSTM, mz.models.KNRM, mz.models.Bert]
+    model_classes = [mz.models.MatchLSTM, mz.models.KNRM]
 
     for model_class in model_classes:
-        print("Prepare for %s Model" % model_class)
-        runner.prepare(model_class, update_preprocessor=False)
+        runner.prepare(model_class)
 
 
 
