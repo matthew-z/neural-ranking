@@ -22,12 +22,14 @@ class ReRankDataset(object):
         self.dataset_path = DATA_FOLDER.joinpath(dataset)
         self.pack = mz.load_data_pack(self.dataset_path.joinpath("train"))
         self.rerank_pack = mz.load_data_pack(self.dataset_path.joinpath("rerank.%d" % rerank_hits))
+        self.topic_path = self.dataset_path.joinpath("topics")
+        self.qrel_path = self.dataset_path.joinpath("qrels")
 
         if shuffle:
             self.pack = self.pack.shuffle()
             self.rerank_pack = self.rerank_pack.shuffle()
         if test:
-            self.pack = self.pack.shuffle()[:5000]
+            self.pack = self.pack.shuffle()[:1000]
             self.rerank_pack = self.rerank_pack.shuffle()[:500]
 
         self.rerank_pack_processed = None

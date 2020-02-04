@@ -27,11 +27,18 @@ class Runner(object):
         self.checkpoint_path = Path(checkpoint_path).absolute()
         self.log_path = Path(log_path).absolute()
 
-    def prepare(self, model_class, task=None, preprocessor=None, force_update_preprocessor=True, config=None):
+    def prepare(self, model_class, task=None, preprocessor=None,
+                force_update_preprocessor=True, config=None, extra_terms=None):
         self.model_class = model_class
         self.run_name = None
-        preprocessor = preprocessor or self.model_class.get_default_preprocessor()
+        preprocessor = preprocessor or self.model_class.get_default_preprocessor(truncated_length_left=20,
+                                                                                 truncated_length_right=1024,
+                                                                                 truncated_mode="post")
+        preprocessor.multiprocessing = 1
+        preprocessor.extra_terms = extra_terms
         update_preprocessor = force_update_preprocessor or type(self.preprocessor) != type(preprocessor)
+        if not update_preprocessor and self.preprocessor:
+            preprocessor = self.preprocessor
 
         (self.model,
          self.preprocessor,
@@ -48,7 +55,7 @@ class Runner(object):
         if update_preprocessor:
             self.dataset.set_preprocessor(self.preprocessor)
 
-    def reset_model(self):
+    def _reset_model(self):
         self.model = self.model_class(params=self.model._params)
         self.model.build()
         return self.model
@@ -56,12 +63,12 @@ class Runner(object):
     def run(self, optimizer=None, optimizer_fn=None, scheduler=None,
             scheduler_fn=None, run_name=None, save_dir=None,
             train=True, devices=None, **kwargs):
-        self.reset_model()
+        self._reset_model()
 
         configs = self._get_default_configs()
         configs.update(kwargs)
         run_name = run_name or self._get_default_run_name(configs)
-        dev_loader, test_loader, train_loader = self.get_dataloaders(configs)
+        train_loader, dev_loader = self.get_dataloaders(configs)
 
         if optimizer_fn:
             optimizer = optimizer_fn(self.model)
@@ -71,7 +78,7 @@ class Runner(object):
         save_dir = save_dir or self.checkpoint_path.joinpath(run_name)
         os.makedirs(save_dir, exist_ok=True)
 
-        trainer = ReRankTrainer(
+        self.trainer = ReRankTrainer(
             model=self.model,
             optimizer=optimizer,
             trainloader=train_loader,
@@ -84,12 +91,24 @@ class Runner(object):
             save_dir=save_dir,
             fp16=self.fp16
         )
+
         if train:
-            trainer.run()
+            self.trainer.run()
         # Restore the best model according to the dev scores.
-        trainer.restore_model(save_dir.joinpath('model.pt'))
-        test_score = trainer.evaluate(test_loader)
-        return test_score
+        self.trainer.restore_model(save_dir.joinpath('model.pt'))
+
+    def predict(self, data_pack, batch_size=32):
+        eval_dataset_builder = mz.dataloader.DatasetBuilder(
+            batch_size=batch_size,
+            shuffle=False,
+            sort=False,
+            resample=False,
+            mode="point"
+        )
+        dataset = eval_dataset_builder.build(self.preprocessor.transform(data_pack))
+        loader = self.dataloader_builder.build(dataset=dataset, stage="test")
+        preds = self.trainer.predict(loader)
+        return preds
 
     def train_kfold(self, kfold_topic_splits=None, fold_num=None, **kwargs):
         results = []
@@ -109,7 +128,7 @@ class Runner(object):
             "patience": 5,
             "train_ratio": 1.0,
             "optimizer_cls": torch.optim.Adam,
-            "lr": None,
+            "lr": 1e-3,
             "batch_size": 64
         }
 
@@ -148,8 +167,5 @@ class Runner(object):
         dev_dataset = eval_dataset_builder.build(self.dataset.dev_pack_processed)
         dev_loader = self.dataloader_builder.build(dataset=dev_dataset,
                                                    stage="dev")
-        # Evaluate Model on the test data
-        test_set = eval_dataset_builder.build(self.dataset.test_pack_processed)
-        test_loader = self.dataloader_builder.build(dataset=test_set,
-                                                    stage="dev")
-        return dev_loader, test_loader, train_loader
+
+        return train_loader, dev_loader

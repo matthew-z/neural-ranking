@@ -75,7 +75,7 @@ class DataBuilder():
         return ids, docs
 
     def _parse_qrels(self):
-        df = pd.read_csv(self.qrel, delimiter=" ", names=self.columns)
+        df = pd.read_csv(self.qrel, delimiter='\s+', names=self.columns)
         print("Qrels length: %d" % len(df))
         return df
 
@@ -108,7 +108,8 @@ class DataBuilder():
 
         datapack = mz.data_pack.pack(df)
         datapack.save(output_path.joinpath("train"))
-        print("Qrel Size: %d, Extracted: %d" %(qrel_len, extracted_qrel_len))
+        print("Qrel Size: %d, Extracted %d documents" %(qrel_len, extracted_qrel_len))
+        print("Datapack contain %d topics" % len(set(df["id_left"])))
 
         return datapack
 
