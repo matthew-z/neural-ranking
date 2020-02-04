@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 
 import matchzoo as mz
+from neural_ranking.dataset.asr.asr_collection import AsrCollection
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
 from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_ranking_task
 
@@ -39,6 +40,7 @@ class Runner(object):
         update_preprocessor = force_update_preprocessor or type(self.preprocessor) != type(preprocessor)
         if not update_preprocessor and self.preprocessor:
             preprocessor = self.preprocessor
+            preprocessor.fit = lambda self, x: None
 
         (self.model,
          self.preprocessor,
@@ -54,6 +56,7 @@ class Runner(object):
 
         if update_preprocessor:
             self.dataset.set_preprocessor(self.preprocessor)
+
 
     def _reset_model(self):
         self.model = self.model_class(params=self.model._params)
@@ -108,7 +111,20 @@ class Runner(object):
         dataset = eval_dataset_builder.build(self.preprocessor.transform(data_pack))
         loader = self.dataloader_builder.build(dataset=dataset, stage="test")
         preds = self.trainer.predict(loader)
-        return preds
+        pred_dict = {}
+        for pred, docid in zip(preds, loader.id_right):
+            pred_dict[docid] = float(pred)
+        return pred_dict
+
+    def eval_asrc(self, asr_collection: AsrCollection):
+        pred_dict = self.predict(asr_collection.data_pack)
+        rounds_dict = {}
+        for docid, score in pred_dict.items():
+            _, round, query_id, author_id = docid.split("-")
+            round = int(round)
+            rounds_dict.setdefault(round, {})
+            rounds_dict[round].setdefault(query_id, [])
+            rounds_dict[round][query_id].append((score, author_id))
 
     def train_kfold(self, kfold_topic_splits=None, fold_num=None, **kwargs):
         results = []

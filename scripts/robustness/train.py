@@ -1,5 +1,6 @@
 import logging
 import os
+from pprint import pprint
 
 import matchzoo as mz
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
@@ -37,7 +38,8 @@ def main():
 
     for model_class in model_classes:
         runner.prepare(model_class, extra_terms=asrc._terms)
-        runner.run()
+        preds = runner.run(asrc.data_pack)
+        pprint(preds)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
