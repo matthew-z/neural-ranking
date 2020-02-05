@@ -1,11 +1,14 @@
-import logging
+import copy
 import os
 from pathlib import Path
 
+import numpy as np
 import torch
+from comet_ml import Experiment
 
 import matchzoo as mz
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
+from neural_ranking.evaluation.robustness import get_robustness_metrics
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
 from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_ranking_task
 
@@ -19,8 +22,6 @@ class Runner(object):
                  fp16=False):
         self.dataset = dataset
         self.raw_embedding = embedding
-
-        self.logger = logging.getLogger("Runner")
         self.preprocessor = None
         self.name = None
         self.fp16 = fp16
@@ -28,10 +29,14 @@ class Runner(object):
         self.checkpoint_path = Path(checkpoint_path).absolute()
         self.log_path = Path(log_path).absolute()
 
+    def _log_hparams(self, configs):
+        if self.logger:
+            self.logger.log_parameters(configs)
+
     def prepare(self, model_class, task=None, preprocessor=None,
-                force_update_preprocessor=True, config=None, extra_terms=None):
+                force_update_preprocessor=True, config=None, extra_terms=None, experiment: Experiment = None):
         self.model_class = model_class
-        self.run_name = None
+        self.logger = experiment
         preprocessor = preprocessor or self.model_class.get_default_preprocessor(truncated_length_left=20,
                                                                                  truncated_length_right=1024,
                                                                                  truncated_mode="post")
@@ -58,18 +63,22 @@ class Runner(object):
             self.dataset.set_preprocessor(self.preprocessor)
 
 
-    def _reset_model(self):
-        self.model = self.model_class(params=self.model._params)
+    def _reset_model(self, configs=None):
+        self.model = self.model_class(params=configs)
         self.model.build()
         return self.model
 
     def run(self, optimizer=None, optimizer_fn=None, scheduler=None,
             scheduler_fn=None, run_name=None, save_dir=None,
             train=True, devices=None, **kwargs):
-        self._reset_model()
-
-        configs = self._get_default_configs()
+        configs = {}
+        if self.model and self.model._params:
+            configs.update(self.model._params)
+        configs.update(self._get_default_configs())
         configs.update(kwargs)
+
+        self._log_hparams(configs)
+        self._reset_model(configs)
         run_name = run_name or self._get_default_run_name(configs)
         train_loader, dev_loader = self.get_dataloaders(configs)
 
@@ -97,8 +106,12 @@ class Runner(object):
 
         if train:
             self.trainer.run()
+
         # Restore the best model according to the dev scores.
         self.trainer.restore_model(save_dir.joinpath('model.pt'))
+        dev_score = self.trainer.evaluate(dev_loader)
+        if self.logger:
+            self.logger.log_metrics({str(metric):score for metric, score in dev_score.items()}, prefix="dev__")
 
     def predict(self, data_pack, batch_size=32):
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
@@ -121,10 +134,32 @@ class Runner(object):
         rounds_dict = {}
         for docid, score in pred_dict.items():
             _, round, query_id, author_id = docid.split("-")
+            query_id = int(query_id)
             round = int(round)
+            author_id = int(author_id)
             rounds_dict.setdefault(round, {})
             rounds_dict[round].setdefault(query_id, [])
             rounds_dict[round][query_id].append((score, author_id))
+        result = {}
+        for metric_name, metric_fn in get_robustness_metrics().items():
+            metric_score = []
+            for round in range(2, 9):
+                queries_curr = rounds_dict[round]
+                queries_prev = rounds_dict[round - 1]
+
+                scores_per_round = []
+                for query in queries_curr:
+                    docs_curr = sorted(queries_curr[query], reverse=True)
+                    docs_prev = sorted(queries_prev[query], reverse=True)
+                    score = metric_fn(docs_prev, docs_curr)
+                    scores_per_round.append(score)
+
+                metric_score.append(np.mean(scores_per_round))
+
+            result[metric_name] = np.mean(metric_score)
+            if self.logger:
+                self.logger.log_metrics(result, prefix="test_")
+        return result
 
     def train_kfold(self, kfold_topic_splits=None, fold_num=None, **kwargs):
         results = []
@@ -145,17 +180,11 @@ class Runner(object):
             "train_ratio": 1.0,
             "optimizer_cls": torch.optim.Adam,
             "lr": 1e-3,
-            "batch_size": 64
+            "batch_size": 64,
         }
 
     def _get_default_run_name(self, configs):
         name = [self.model_class.__name__]
-        for k, v in configs.items():
-            if isinstance(v, type):
-                str_v = v.__name__
-            else:
-                str_v = str(v)
-            name.append("%s=%s" % (str(k), str_v))
         return ".".join(name)
 
     def get_dataloaders(self, configs):

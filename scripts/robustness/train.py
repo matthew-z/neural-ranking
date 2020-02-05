@@ -1,6 +1,7 @@
 import logging
 import os
 from pprint import pprint
+from comet_ml import Experiment
 
 import matchzoo as mz
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
@@ -35,11 +36,16 @@ def main():
                     fp16=args.fp16)
 
     model_classes = [mz.models.MatchLSTM, mz.models.KNRM, mz.models.ConvKNRM]
-
     for model_class in model_classes:
-        runner.prepare(model_class, extra_terms=asrc._terms)
-        preds = runner.run(asrc.data_pack)
-        pprint(preds)
+        for dropout in [0, 0.1, 0.2, 0.3,0.4, 0.5]:
+            exp = Experiment(project_name="ASR_test" if args.test else "ASR",
+                             workspace="Robustness",
+                             log_env_cpu=False,
+                             log_env_gpu=False)
+            exp.add_tag("%s" % model_class.__name__)
+            runner.prepare(model_class, extra_terms=asrc._terms, experiment=exp)
+            runner.run(dropout=dropout)
+            result = runner.eval_asrc(asrc)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
