@@ -37,7 +37,7 @@ def bert_optimizer_fn(model):
 
 def main():
     args = parse_args()
-    dataset = ReRankDataset(args.dataset, rerank_hits=1000, test=args.test)
+    dataset = ReRankDataset(args.dataset, rerank_hits=1000, debug_mode=args.test)
     runner = Runner(embedding=None,
                     log_path=args.log_path,
                     dataset=dataset,

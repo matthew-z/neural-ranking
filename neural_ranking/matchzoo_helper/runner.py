@@ -1,4 +1,3 @@
-import copy
 import os
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_r
 class Runner(object):
     def __init__(self,
                  dataset: ReRankDataset,
+                 preprocessor_path=None,
                  embedding=None,
                  log_path: str = "log",
                  checkpoint_path="checkpoint",
@@ -28,6 +28,7 @@ class Runner(object):
 
         self.checkpoint_path = Path(checkpoint_path).absolute()
         self.log_path = Path(log_path).absolute()
+        self.preprocessor_path = preprocessor_path
 
     def _log_hparams(self, configs):
         if self.logger:
@@ -37,11 +38,18 @@ class Runner(object):
                 force_update_preprocessor=True, config=None, extra_terms=None, experiment: Experiment = None):
         self.model_class = model_class
         self.logger = experiment
-        preprocessor = preprocessor or self.model_class.get_default_preprocessor(truncated_length_left=20,
-                                                                                 truncated_length_right=1024,
-                                                                                 truncated_mode="post")
-        preprocessor.multiprocessing = 1
-        preprocessor.extra_terms = extra_terms
+
+        if self.preprocessor is None:
+            if self.preprocessor_path is not None and os.path.exists(self.preprocessor_path):
+                preprocessor = mz.load_preprocessor(self.preprocessor_path)
+                self.preprocessor = preprocessor
+            else:
+                preprocessor = preprocessor or self.model_class.get_default_preprocessor(truncated_length_left=20,
+                                                                                         truncated_length_right=1024,
+                                                                                         truncated_mode="post")
+                preprocessor.multiprocessing = 0 if self.dataset.debug_mode else 1
+                preprocessor.extra_terms = extra_terms
+
         update_preprocessor = force_update_preprocessor or type(self.preprocessor) != type(preprocessor)
         if not update_preprocessor and self.preprocessor:
             preprocessor = self.preprocessor
@@ -64,21 +72,21 @@ class Runner(object):
 
 
     def _reset_model(self, configs=None):
-        self.model = self.model_class(params=configs)
+        self.model._params.update(configs)
+        assert self.model._params["embedding"] is not None
         self.model.build()
         return self.model
 
-    def run(self, optimizer=None, optimizer_fn=None, scheduler=None,
-            scheduler_fn=None, run_name=None, save_dir=None,
-            train=True, devices=None, **kwargs):
-        configs = {}
-        if self.model and self.model._params:
-            configs.update(self.model._params)
-        configs.update(self._get_default_configs())
-        configs.update(kwargs)
+    def train(self, optimizer=None, optimizer_fn=None, scheduler=None,
+              scheduler_fn=None, run_name=None, save_dir=None,
+              train=True, devices=None, **kwargs):
 
-        self._log_hparams(configs)
+        configs = self._get_default_configs()
+        configs.update(kwargs)
         self._reset_model(configs)
+        self._log_hparams(configs)
+        self._log_hparams(self.model._params.to_dict())
+
         run_name = run_name or self._get_default_run_name(configs)
         train_loader, dev_loader = self.get_dataloaders(configs)
 
@@ -169,7 +177,7 @@ class Runner(object):
                 break
             print(">>>> Fold - %d of %d" % (i, len(kfolds)))
             self.dataset.init_topic_splits(topic_splits)
-            results.append(self.run(**kwargs))
+            results.append(self.train(**kwargs))
         result = dict_mean(results)
         return result
 

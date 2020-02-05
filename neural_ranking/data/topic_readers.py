@@ -23,7 +23,7 @@ class TrecXmlTopicReader(TopicReader):
     def __call__(self, path, query_or_description="query"):
         topic_ids = []
         queries = []
-        soup = bs4.BeautifulSoup(open(path))
+        soup = bs4.BeautifulSoup(open(path), features="html.parser")
         topics = soup.find_all("topic")
         for topic in topics:
             qid = int(topic.attrs["number"])
@@ -98,7 +98,7 @@ class TrecRobustTopicReader(TopicReader):
 class NtcirTopicReader(TopicReader):
     def __call__(self, path):
         with open(path) as fin:
-            soup = bs4.BeautifulSoup(fin)
+            soup = bs4.BeautifulSoup(fin, features="html.parser")
         builder = TopicsBuilder()
 
         raw_queries = soup.find_all("query")

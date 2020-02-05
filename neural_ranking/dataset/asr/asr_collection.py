@@ -20,11 +20,11 @@ class AsrCollection(object):
 
         with open(self.folder_path.joinpath("documents.ks")) as f:
             self.ks_df = pd.read_csv(f, names=["id_left", "intent", "id_right", "ks"], index_col="id_right",
-                                     dtype={"id_left": "int32", "ks": "int32"}, delimiter="\s")
+                                     dtype={"id_left": "int32", "ks": "int32"}, delimiter="\s", engine="python")
             self.ks_df = self.ks_df[["ks"]]
 
         with open(self.folder_path.joinpath("documents.trectext")) as f:
-            soup = bs4.BeautifulSoup(f)
+            soup = bs4.BeautifulSoup(f, features="html.parser")
             texts = []
             round_nums = []
             query_ids = []

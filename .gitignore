@@ -1,3 +1,7 @@
+.comet.config
+checkpoint
+logs
+msmacro_log
 .idea
 .vscode
 built_data
