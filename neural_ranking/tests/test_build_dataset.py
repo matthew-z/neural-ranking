@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from dataset.build_pack_from_qrels import TrecDataBuilder
+from neural_ranking.data.build_pack_from_qrels import TrecDataBuilder
 
 
 class TestTrecDataBuilder(TestCase):
@@ -11,5 +11,4 @@ class TestTrecDataBuilder(TestCase):
         qrel = "resources/topics_and_qrels/qrels.robust2004.txt"
 
         builder = TrecDataBuilder(index, topic, qrel)
-
         mypack = builder.build_datapack("./built_data/robust04.datapack")
