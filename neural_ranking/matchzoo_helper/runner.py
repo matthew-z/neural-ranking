@@ -238,7 +238,7 @@ class Runner(object):
         )
         train_loader = self.dataloader_builder.build(trainset)
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
-            batch_size=batch_size,
+            batch_size=batch_size*2,
             shuffle=False,
             sort=False,
             resample=False,

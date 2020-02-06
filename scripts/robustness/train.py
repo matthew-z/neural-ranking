@@ -81,11 +81,12 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner):
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
+            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
                 epochs=3 if args.test else 20,
                 weight_decay=weight_decay,
                 optimizer_cls=torch.optim.AdamW,
-                batch_size=32 * args.gpu_num if model_class != mz.models.Bert else 3* args.gpu_num,
+                batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
             )
@@ -104,11 +105,12 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
+            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3* args.gpu_num
             runner.train(
                 epochs=3 if args.test else 20,
                 dropout=dropout,
                 dropout_rate=dropout,
-                batch_size=32 * args.gpu_num if model_class != mz.models.Bert else 3* args.gpu_num,
+                batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
             )
