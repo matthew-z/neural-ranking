@@ -7,9 +7,20 @@ from comet_ml import Experiment
 
 import matchzoo as mz
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
-from neural_ranking.evaluation.robustness import get_robustness_metrics
+from neural_ranking.evaluation import robustness
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
 from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_ranking_task
+
+def calculate_model_norm(model):
+    no_decay = ['bias', 'LayerNorm.weight']
+    total_norm = 0
+    for name, param in model.named_parameters():
+        if any(nd in name for nd in no_decay):
+            continue
+        total_norm += (param.data.norm(2))**2
+
+    total_norm = (total_norm ** (1 / 2)).item()
+    return total_norm
 
 
 class Runner(object):
@@ -34,26 +45,33 @@ class Runner(object):
         if self.logger:
             self.logger.log_parameters(configs)
 
-    def prepare(self, model_class, task=None, preprocessor=None,
-                force_update_preprocessor=True, config=None, extra_terms=None, experiment: Experiment = None):
+    def _load_basic_preprocessor(self, extra_terms):
+        dataset_name = self.dataset.dataset
+        preprocessor_name = "basic" if self.model_class != mz.models.Bert else "bert"
+        preprocessor_folder = self.preprocessor_path
+        save_name = ".".join([preprocessor_name, dataset_name])
+        save_path = os.path.join(preprocessor_folder, save_name)
+        if os.path.exists(save_path) and self.model_class != mz.models.Bert:
+            preprocessor = mz.load_preprocessor(save_path)
+            print("Load Preprocessor from %s" % save_path)
+            preprocessor.fit = lambda *args, **argv: None
+            save_path = None
+        else:
+            print("Init Preprocessor" )
+            preprocessor = self.model_class.get_default_preprocessor(
+                truncated_length_left=20,
+                truncated_length_right=1024 if self.model_class != mz.models.Bert else 492,
+                truncated_mode="post")
+
+            preprocessor.multiprocessing = 0 if self.dataset.debug_mode else 1
+            preprocessor.extra_terms = extra_terms
+        return preprocessor, save_path
+
+    def prepare(self, model_class, task=None, config=None, extra_terms=None, experiment: Experiment = None):
         self.model_class = model_class
         self.logger = experiment
-
-        if self.preprocessor is None:
-            if self.preprocessor_path is not None and os.path.exists(self.preprocessor_path):
-                preprocessor = mz.load_preprocessor(self.preprocessor_path)
-                self.preprocessor = preprocessor
-            else:
-                preprocessor = preprocessor or self.model_class.get_default_preprocessor(truncated_length_left=20,
-                                                                                         truncated_length_right=1024,
-                                                                                         truncated_mode="post")
-                preprocessor.multiprocessing = 0 if self.dataset.debug_mode else 1
-                preprocessor.extra_terms = extra_terms
-
-        update_preprocessor = force_update_preprocessor or type(self.preprocessor) != type(preprocessor)
-        if not update_preprocessor and self.preprocessor:
-            preprocessor = self.preprocessor
-            preprocessor.fit = lambda self, x: None
+        preprocessor, save_path = self._load_basic_preprocessor(extra_terms)
+        update_preprocessor = type(self.preprocessor) != type(preprocessor)
 
         (self.model,
          self.preprocessor,
@@ -66,14 +84,16 @@ class Runner(object):
             preprocessor=preprocessor,
             config=config
         )
-
         if update_preprocessor:
+            print("Transform dataset" )
             self.dataset.set_preprocessor(self.preprocessor)
-
+        if save_path and self.model_class != mz.models.Bert and not self.dataset.debug_mode:
+            preprocessor.fit = lambda *args, **argv: None
+            self.preprocessor.save(save_path)
+            print("Save Preprocessor to %s" % save_path)
 
     def _reset_model(self, configs=None):
         self.model._params.update(configs)
-        assert self.model._params["embedding"] is not None
         self.model.build()
         return self.model
 
@@ -93,11 +113,19 @@ class Runner(object):
         if optimizer_fn:
             optimizer = optimizer_fn(self.model)
         else:
-            optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=configs["lr"])
+            no_decay = ['bias', 'LayerNorm.weight']
+            optimizer_grouped_parameters = [
+                {'params': [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
+                 'weight_decay': configs["weight_decay"]},
+                {'params': [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
+                 'weight_decay': 0.0}
+            ]
+            optimizer = optimizer or configs["optimizer_cls"](optimizer_grouped_parameters,
+                                                              lr=configs["lr"], )
 
         save_dir = save_dir or self.checkpoint_path.joinpath(run_name)
         os.makedirs(save_dir, exist_ok=True)
-
+        self.logger.log_metric(name="model_norm_untrained", value=calculate_model_norm(self.model))
         self.trainer = ReRankTrainer(
             model=self.model,
             optimizer=optimizer,
@@ -118,6 +146,8 @@ class Runner(object):
         # Restore the best model according to the dev scores.
         self.trainer.restore_model(save_dir.joinpath('model.pt'))
         dev_score = self.trainer.evaluate(dev_loader)
+        self.logger.log_metric(name="model_norm_trained", value=calculate_model_norm(self.model))
+
         if self.logger:
             self.logger.log_metrics({str(metric):score for metric, score in dev_score.items()}, prefix="dev__")
 
@@ -148,8 +178,9 @@ class Runner(object):
             rounds_dict.setdefault(round, {})
             rounds_dict[round].setdefault(query_id, [])
             rounds_dict[round][query_id].append((score, author_id))
+        self.logger.log_asset_data(rounds_dict, file_name="rounds_dict")
         result = {}
-        for metric_name, metric_fn in get_robustness_metrics().items():
+        for metric_name, metric_fn in robustness.get_robustness_metrics().items():
             metric_score = []
             for round in range(2, 9):
                 queries_curr = rounds_dict[round]
@@ -183,12 +214,12 @@ class Runner(object):
 
     def _get_default_configs(self):
         return {
-            "epochs": 10,
-            "patience": 5,
-            "train_ratio": 1.0,
+            "epochs": 20,
+            "patience": 3,
             "optimizer_cls": torch.optim.Adam,
-            "lr": 1e-3,
+            "lr": 3e-4,
             "batch_size": 64,
+            "weight_decay": 0
         }
 
     def _get_default_run_name(self, configs):
@@ -196,12 +227,7 @@ class Runner(object):
         return ".".join(name)
 
     def get_dataloaders(self, configs):
-        train_ratio = configs.get("train_ratio")
-        if train_ratio < 1.0:
-            train_size = int(len(self.dataset.train_pack_processed) * train_ratio)
-            training_pack = self.dataset.train_pack_processed[:train_size]
-        else:
-            training_pack = self.dataset.train_pack_processed
+        training_pack = self.dataset.train_pack_processed
         # Setup data
         batch_size = configs.get("batch_size")
         trainset = self.dataset_builder.build(

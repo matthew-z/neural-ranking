@@ -1,7 +1,8 @@
 import logging
 import os
-from pprint import pprint
-from comet_ml import Experiment
+
+import comet_ml
+import torch
 
 import matchzoo as mz
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
@@ -20,7 +21,10 @@ def parse_args():
     parser.add_argument("--log-path", type=path, default="robustness_log")
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
-    parser.add_argument("--saved-preprocessor", type=path, default=None)
+    parser.add_argument("--gpu-num", type=int, default=1)
+    parser.add_argument("--models", type=str, choices=["bert", "others", "all"], default="all")
+    parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay"])
+    parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
 
     args = parser.parse_args()
     return args
@@ -36,19 +40,81 @@ def main():
                     log_path=args.log_path,
                     dataset=dataset,
                     fp16=args.fp16)
+    if args.models == "bert":
+        model_classes = [mz.models.Bert]
+    elif args.models == "others":
+        model_classes = [mz.models.MatchLSTM, mz.models.ConvKNRM]
+    else:
+        model_classes = [mz.models.Bert, mz.models.MatchLSTM, mz.models.ConvKNRM]
 
-    model_classes = [mz.models.MatchLSTM, mz.models.ConvKNRM]
+    exp_args = args, asrc, embedding, model_classes, runner
+
+
+    if args.exp ==  "all":
+        exp = [dropout_exp, weight_decay_exp]
+    elif args.exp == "dropout":
+        exp = [dropout_exp]
+    elif args.exp == "weight_decay":
+        exp = [weight_decay_exp]
+    else:
+        raise ValueError("Incorrect Exp Value: %s" % args.exp)
+
+    for e in exp:
+        e(*exp_args)
+
+
+def multi_gpu(gpu_num=1):
+    if gpu_num == 0:
+        return "cpu"
+    else:
+        return [torch.device('cuda:%d' % i) for i in range(gpu_num)]
+
+
+def weight_decay_exp(args, asrc, embedding, model_classes, runner):
     for model_class in model_classes:
-        runner.prepare(model_class, extra_terms=asrc._terms)
-        for dropout in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-            exp = Experiment(project_name="ASR" if not args.test else "ASR-test",
-                             workspace="Robustness",
-                             log_env_cpu=False)
+        for weight_decay in [1e-2, 0.1, 1e-3, 1e-4]:
+            exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
+                                      workspace="Robustness",
+                                      log_env_cpu=False)
             exp.add_tag("%s" % model_class.__name__)
+            exp.add_tag("weight_decay")
             exp.log_parameter("embedding_name", str(embedding))
+            runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
-            runner.train(dropout=dropout, dropout_rate=dropout, batch_size=16)
+            runner.train(
+                epochs=3 if args.test else 20,
+                weight_decay=weight_decay,
+                optimizer_cls=torch.optim.AdamW,
+                batch_size=32 * args.gpu_num if model_class != mz.models.Bert else 3* args.gpu_num,
+                lr=3e-4 if model_class != mz.models.Bert else 3e-5,
+                devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
+            )
             runner.eval_asrc(asrc)
+            torch.cuda.empty_cache()
+
+
+def dropout_exp(args, asrc, embedding, model_classes, runner):
+    for model_class in model_classes:
+        for dropout in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]:
+            exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
+                                      workspace="Robustness",
+                                      log_env_cpu=False)
+            exp.add_tag("%s" % model_class.__name__)
+            exp.add_tag("dropout")
+            exp.log_parameter("embedding_name", str(embedding))
+            runner.prepare(model_class, extra_terms=asrc._terms)
+            runner.logger = exp
+            runner.train(
+                epochs=3 if args.test else 20,
+                dropout=dropout,
+                dropout_rate=dropout,
+                batch_size=32 * args.gpu_num if model_class != mz.models.Bert else 3* args.gpu_num,
+                lr=3e-4 if model_class != mz.models.Bert else 3e-5,
+                devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
+            )
+            runner.eval_asrc(asrc)
+            torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)

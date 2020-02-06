@@ -2,6 +2,9 @@
 import numpy as np
 import keras
 import typing
+from matchzoo.engine.base_callback import BaseCallback
+
+
 
 class EvaluateAllMetrics(keras.callbacks.Callback):
     """
