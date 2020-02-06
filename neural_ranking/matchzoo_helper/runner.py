@@ -6,6 +6,7 @@ import torch
 from comet_ml import Experiment
 
 import matchzoo as mz
+from neural_ranking.data.callbacks import InsertQueryToDoc
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
 from neural_ranking.evaluation import robustness
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
@@ -220,7 +221,8 @@ class Runner(object):
             "optimizer_cls": torch.optim.Adam,
             "lr": 3e-4,
             "batch_size": 64,
-            "weight_decay": 0
+            "weight_decay": 0,
+            "data_aug": 0
         }
 
     def _get_default_run_name(self, configs):
@@ -231,14 +233,23 @@ class Runner(object):
         training_pack = self.dataset.train_pack_processed
         # Setup data
         batch_size = configs.get("batch_size")
+
+        if configs["data_aug"]:
+            max_length = 492 if self.model_class == mz.models.Bert else 1024
+            term_index = self.preprocessor.context["vocab_unit"].context["term_index"]
+            callbacks = InsertQueryToDoc(term_index, ratio=configs["data_aug"], max_length=max_length)
+        else:
+            callbacks = None
+
         trainset = self.dataset_builder.build(
             training_pack,
             batch_size=batch_size,
-            sort=False
+            sort=False,
+            callbacks=callbacks
         )
         train_loader = self.dataloader_builder.build(trainset)
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
-            batch_size=batch_size*2,
+            batch_size=batch_size * 2,
             shuffle=False,
             sort=False,
             resample=False,

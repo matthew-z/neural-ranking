@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
     parser.add_argument("--models", type=str, choices=["bert", "others", "all"], default="all")
-    parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay"])
+    parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
 
     args = parser.parse_args()
@@ -49,13 +49,14 @@ def main():
 
     exp_args = args, asrc, embedding, model_classes, runner
 
-
-    if args.exp ==  "all":
-        exp = [dropout_exp, weight_decay_exp]
+    if args.exp == "all":
+        exp = [dropout_exp, weight_decay_exp, data_aug_exp]
     elif args.exp == "dropout":
         exp = [dropout_exp]
     elif args.exp == "weight_decay":
         exp = [weight_decay_exp]
+    elif args.exp == "data_aug":
+        exp = [data_aug_exp]
     else:
         raise ValueError("Incorrect Exp Value: %s" % args.exp)
 
@@ -113,6 +114,29 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
                 batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
+            )
+            runner.eval_asrc(asrc)
+            torch.cuda.empty_cache()
+
+
+def data_aug_exp(args, asrc, embedding, model_classes, runner):
+    for model_class in model_classes:
+        for data_aug in [0, 0.3, 0.6, 0.9]:
+            exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
+                                      workspace="Robustness",
+                                      log_env_cpu=False)
+            exp.add_tag("%s" % model_class.__name__)
+            exp.add_tag("dropout")
+            exp.log_parameter("embedding_name", str(embedding))
+            runner.prepare(model_class, extra_terms=asrc._terms)
+            runner.logger = exp
+            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
+            runner.train(
+                epochs=3 if args.test else 20,
+                batch_size=batch_size,
+                lr=3e-4 if model_class != mz.models.Bert else 3e-5,
+                devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
+                data_aug=data_aug
             )
             runner.eval_asrc(asrc)
             torch.cuda.empty_cache()

@@ -9,13 +9,15 @@ class InsertQueryToDoc(BaseCallback):
                  insert_mode="pre",
                  ignore_positive=True,
                  positive_threshold=1,
-                 ratio=1):
+                 ratio=1,
+                 max_length = None
+                 ):
         self.termIndex = termIndex
         self.insert_mode = insert_mode
         self.ratio = ratio
         self.ignore_positive = ignore_positive
         self.positive_threshold = positive_threshold
-
+        self.max_length = max_length
     def on_batch_unpacked(self, x: dict, y: np.ndarray):
         assert len(x["text_left"]) == len(x["text_right"])
         space = self.termIndex[" "]
@@ -37,6 +39,9 @@ class InsertQueryToDoc(BaseCallback):
             else:
                 insert_pos = 0
             new_doc = doc[:insert_pos] + query + doc[insert_pos:]
+            if self.max_length:
+                new_doc = new_doc[:self.max_length]
+
             x["text_right"][i] = new_doc
             assert x["length_right"][i] == len(doc)
             x["length_right"][i] = len(new_doc)
