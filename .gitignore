@@ -1,6 +1,7 @@
 .comet.config
 checkpoint
 logs
+preprocessor
 msmacro_log
 .idea
 .vscode
