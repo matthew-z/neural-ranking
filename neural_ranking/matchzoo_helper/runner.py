@@ -11,6 +11,7 @@ from neural_ranking.evaluation import robustness
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
 from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_ranking_task
 
+
 def calculate_model_norm(model):
     no_decay = ['bias', 'LayerNorm.weight']
     total_norm = 0
