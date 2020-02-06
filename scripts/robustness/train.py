@@ -126,7 +126,7 @@ def data_aug_exp(args, asrc, embedding, model_classes, runner):
                                       workspace="Robustness",
                                       log_env_cpu=False)
             exp.add_tag("%s" % model_class.__name__)
-            exp.add_tag("dropout")
+            exp.add_tag("data_aug")
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
