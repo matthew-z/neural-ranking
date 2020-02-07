@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
-    parser.add_argument("--models", type=str, choices=["bert", "others", "all"], default="all")
+    parser.add_argument("--models", type=str, choices=["bert", "others", "match_lstm", "conv_knrm","all"], default="all")
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
 
@@ -44,6 +44,10 @@ def main():
         model_classes = [mz.models.Bert]
     elif args.models == "others":
         model_classes = [mz.models.MatchLSTM, mz.models.ConvKNRM]
+    elif args.models == "conv_knrm":
+        model_classes = [mz.models.ConvKNRM]
+    elif args.models == "match_lstm":
+        model_classes = [mz.models.MatchLSTM]
     else:
         model_classes = [mz.models.Bert, mz.models.MatchLSTM, mz.models.ConvKNRM]
 
@@ -73,7 +77,7 @@ def multi_gpu(gpu_num=1):
 
 def weight_decay_exp(args, asrc, embedding, model_classes, runner):
     for model_class in model_classes:
-        for weight_decay in [1e-2, 0.1, 1e-3, 1e-4]:
+        for weight_decay in [0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
@@ -97,7 +101,7 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner):
 
 def dropout_exp(args, asrc, embedding, model_classes, runner):
     for model_class in model_classes:
-        for dropout in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]:
+        for dropout in [0, 0.1, 0.3, 0.5, 0.7]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
@@ -106,7 +110,7 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
-            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3* args.gpu_num
+            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
                 epochs=3 if args.test else 20,
                 dropout=dropout,
@@ -121,7 +125,7 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
 
 def data_aug_exp(args, asrc, embedding, model_classes, runner):
     for model_class in model_classes:
-        for data_aug in [0.3, 0.6, 0.9]:
+        for data_aug in [0.1, 0.3, 0.5]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
