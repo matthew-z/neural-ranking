@@ -1,26 +1,26 @@
+import random
+
 import numpy as np
 
 from matchzoo.engine.base_callback import BaseCallback
-import random
+
 
 class InsertQueryToDoc(BaseCallback):
     def __init__(self,
-                 termIndex,
-                 insert_mode="pre",
+                 insert_mode="random",
                  ignore_positive=True,
                  positive_threshold=1,
                  ratio=1,
-                 max_length = None
+                 max_length=None
                  ):
-        self.termIndex = termIndex
         self.insert_mode = insert_mode
         self.ratio = ratio
         self.ignore_positive = ignore_positive
         self.positive_threshold = positive_threshold
         self.max_length = max_length
+
     def on_batch_unpacked(self, x: dict, y: np.ndarray):
         assert len(x["text_left"]) == len(x["text_right"])
-        space = self.termIndex[" "]
 
         if x["text_right"].dtype != np.object:
             x["text_right"] = list(x["text_right"])
@@ -32,12 +32,15 @@ class InsertQueryToDoc(BaseCallback):
             if self.ratio < 1 and random.uniform(0, 1) < self.ratio:
                 continue
 
-            query = [space] + list(x["text_left"][i]) + [space]
+            query = list(x["text_left"][i])
             doc = list(x["text_right"][i])
             if self.insert_mode == "pre":
                 insert_pos = 0
+            elif self.insert_mode == "random":
+                insert_pos = random.choice(range(x["length_right"][i]))
             else:
                 insert_pos = 0
+
             new_doc = doc[:insert_pos] + query + doc[insert_pos:]
             if self.max_length:
                 new_doc = new_doc[:self.max_length]

@@ -121,7 +121,7 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
 
 def data_aug_exp(args, asrc, embedding, model_classes, runner):
     for model_class in model_classes:
-        for data_aug in [0, 0.3, 0.6, 0.9]:
+        for data_aug in [0.3, 0.6, 0.9]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)

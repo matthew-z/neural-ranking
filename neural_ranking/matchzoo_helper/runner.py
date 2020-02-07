@@ -233,11 +233,9 @@ class Runner(object):
         training_pack = self.dataset.train_pack_processed
         # Setup data
         batch_size = configs.get("batch_size")
-
-        if configs["data_aug"]:
+        if configs["data_aug"] > 0:
             max_length = 492 if self.model_class == mz.models.Bert else 1024
-            term_index = self.preprocessor.context["vocab_unit"].context["term_index"]
-            callbacks = InsertQueryToDoc(term_index, ratio=configs["data_aug"], max_length=max_length)
+            callbacks = [InsertQueryToDoc(ratio=configs["data_aug"], max_length=max_length)]
         else:
             callbacks = None
 

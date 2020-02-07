@@ -60,7 +60,7 @@ class RBO(RobustnessMetric):
         if self.mode == "min":
             return res.min
         if self.mode == "avg":
-            return (res.min + res.max) / 2
+            return (res.min + res.ext) / 2
         else:
             return res.ext
 
