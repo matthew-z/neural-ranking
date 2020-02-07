@@ -92,7 +92,7 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner):
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
             )
             runner.eval_asrc(asrc)
-            torch.cuda.empty_cache()
+            runner.free_memory()
 
 
 def dropout_exp(args, asrc, embedding, model_classes, runner):
@@ -116,7 +116,7 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
             )
             runner.eval_asrc(asrc)
-            torch.cuda.empty_cache()
+            runner.free_memory()
 
 
 def data_aug_exp(args, asrc, embedding, model_classes, runner):
