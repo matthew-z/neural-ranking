@@ -139,7 +139,7 @@ def data_aug_exp(args, asrc, embedding, model_classes, runner):
                 data_aug=data_aug
             )
             runner.eval_asrc(asrc)
-            torch.cuda.empty_cache()
+            runner.free_memory()
 
 
 if __name__ == "__main__":

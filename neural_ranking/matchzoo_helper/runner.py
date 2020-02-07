@@ -258,3 +258,8 @@ class Runner(object):
                                                    stage="dev")
 
         return train_loader, dev_loader
+
+    def free_memory(self):
+        del self.trainer
+        del self.model
+        torch.cuda.empty_cache()
