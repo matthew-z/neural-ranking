@@ -29,7 +29,7 @@ class InsertQueryToDoc(BaseCallback):
             if self.ignore_positive and y[i] >= self.positive_threshold:
                 continue
 
-            if self.ratio < 1 and random.uniform(0, 1) < self.ratio:
+            if self.ratio < 1 and random.uniform(0, 1) > self.ratio:
                 continue
 
             query = list(x["text_left"][i])
@@ -37,7 +37,7 @@ class InsertQueryToDoc(BaseCallback):
             if self.insert_mode == "pre":
                 insert_pos = 0
             elif self.insert_mode == "random":
-                insert_pos = random.choice(range(x["length_right"][i]))
+                insert_pos = random.choice(range(min(x["length_right"][i], self.max_length - len(query))))
             else:
                 insert_pos = 0
 
