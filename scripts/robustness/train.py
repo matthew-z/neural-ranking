@@ -140,6 +140,7 @@ def data_aug_exp(args, asrc, embedding, model_classes, runner):
             )
             runner.eval_asrc(asrc)
             runner.free_memory()
+            import ipdb;ipdb.set_trace()
 
 
 if __name__ == "__main__":

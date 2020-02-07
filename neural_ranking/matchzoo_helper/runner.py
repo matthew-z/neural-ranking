@@ -1,3 +1,4 @@
+import gc
 import os
 from pathlib import Path
 
@@ -262,4 +263,5 @@ class Runner(object):
     def free_memory(self):
         del self.trainer
         del self.model
+        gc.collect()
         torch.cuda.empty_cache()
