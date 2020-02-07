@@ -65,7 +65,7 @@ def main():
     else:
         raise ValueError("Incorrect Exp Value: %s" % args.exp)
 
-    for _ in args.repeat:
+    for _ in range(args.repeat):
         for e in exp:
             e(*exp_args)
 
