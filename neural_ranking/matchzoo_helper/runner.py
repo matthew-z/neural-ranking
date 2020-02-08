@@ -138,7 +138,7 @@ class Runner(object):
         os.makedirs(save_dir, exist_ok=True)
         model_norm, embedding_norm = calculate_model_norm(self.model)
         self.logger.log_metric(name="model_norm_untrained", value=model_norm)
-        self.logger.log_metric(name="embedding_norm_untrained", value=model_norm)
+        self.logger.log_metric(name="embedding_norm_untrained", value=embedding_norm)
 
         self.trainer = ReRankTrainer(
             model=self.model,
