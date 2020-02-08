@@ -139,6 +139,7 @@ def data_aug_exp(args, asrc, embedding, model_classes, runner):
             batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
                 epochs=3 if args.test else 20,
+                min_epochs=1 if args.test else 10,
                 batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),

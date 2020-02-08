@@ -17,13 +17,21 @@ from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_r
 def calculate_model_norm(model):
     no_decay = ['bias', 'LayerNorm.weight']
     total_norm = 0
+    embedding_norm = 0
     for name, param in model.named_parameters():
+
         if any(nd in name for nd in no_decay):
             continue
-        total_norm += (param.data.norm(2))**2
+        elif "embedding" in name:
+            embedding_norm += (param.data.norm(2)) ** 2
+        else:
+            total_norm += (param.data.norm(2)) ** 2
 
     total_norm = (total_norm ** (1 / 2)).item()
-    return total_norm
+    embedding_norm = (embedding_norm ** (1 / 2)).item()
+    return total_norm, embedding_norm
+
+
 
 
 class Runner(object):
@@ -128,7 +136,10 @@ class Runner(object):
 
         save_dir = save_dir or self.checkpoint_path.joinpath(run_name)
         os.makedirs(save_dir, exist_ok=True)
-        self.logger.log_metric(name="model_norm_untrained", value=calculate_model_norm(self.model))
+        model_norm, embedding_norm = calculate_model_norm(self.model)
+        self.logger.log_metric(name="model_norm_untrained", value=model_norm)
+        self.logger.log_metric(name="embedding_norm_untrained", value=model_norm)
+
         self.trainer = ReRankTrainer(
             model=self.model,
             optimizer=optimizer,
@@ -149,7 +160,9 @@ class Runner(object):
         # Restore the best model according to the dev scores.
         self.trainer.restore_model(save_dir.joinpath('model.pt'))
         dev_score = self.trainer.evaluate(dev_loader)
-        self.logger.log_metric(name="model_norm_trained", value=calculate_model_norm(self.model))
+        model_norm, embedding_norm = calculate_model_norm(self.model)
+        self.logger.log_metric(name="model_norm_trained", value=model_norm)
+        self.logger.log_metric(name="embedding_norm_trained", value=embedding_norm)
 
         if self.logger:
             self.logger.log_metrics({str(metric):score for metric, score in dev_score.items()}, prefix="dev__")
