@@ -98,7 +98,6 @@ def main():
         exp.add_tag("tuning")
         exp.log_parameter("embedding_name", str(embedding))
         runner.logger = exp
-
         runner.prepare(model_class, extra_terms=asrc._terms)
         batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
         runner.train(

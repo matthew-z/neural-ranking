@@ -78,9 +78,8 @@ class Runner(object):
             preprocessor.extra_terms = extra_terms
         return preprocessor, save_path
 
-    def prepare(self, model_class, task=None, config=None, extra_terms=None, experiment: Experiment = None):
+    def prepare(self, model_class, task=None, config=None, extra_terms=None):
         self.model_class = model_class
-        self.logger = experiment
         preprocessor, save_path = self._load_basic_preprocessor(extra_terms)
         update_preprocessor = type(self.preprocessor) != type(preprocessor)
 
