@@ -24,10 +24,9 @@ def parse_args():
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
-    parser.add_argument("--models", type=str, choices=["bert", "others", "match_lstm", "conv_knrm", "all"],
+    parser.add_argument("--models", type=str, choices=["bert", "match_lstm", "conv_knrm"],
                         default="all")
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
-    parser.add_argument("--repeat", type=int, default=5)
 
     args = parser.parse_args()
     return args
@@ -102,12 +101,11 @@ def main():
 
         runner.prepare(model_class, extra_terms=asrc._terms)
         batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
-
         runner.train(
             epochs=3 if args.test else 20,
             optimizer_cls=torch.optim.Adam,
             batch_size=batch_size,
-            devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
+            devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
             **params
         )
         runner.free_memory()
