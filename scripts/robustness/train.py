@@ -77,7 +77,7 @@ def multi_gpu(gpu_num=1):
         return [torch.device('cuda:%d' % i) for i in range(gpu_num)]
 
 
-def weight_decay_exp(args, asrc, embedding, model_classes, runner):
+def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
         for weight_decay in [0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
@@ -101,7 +101,7 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner):
             runner.free_memory()
 
 
-def dropout_exp(args, asrc, embedding, model_classes, runner):
+def dropout_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
         for dropout in [0, 0.1, 0.3, 0.5, 0.7]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
@@ -125,7 +125,7 @@ def dropout_exp(args, asrc, embedding, model_classes, runner):
             runner.free_memory()
 
 
-def data_aug_exp(args, asrc, embedding, model_classes, runner):
+def data_aug_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
         for data_aug in [0.1, 0.3, 0.5]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
