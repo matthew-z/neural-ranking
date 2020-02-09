@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
-    parser.add_argument("--models", type=str, choices=["bert", "others", "match_lstm", "conv_knrm","all"], default="all")
+    parser.add_argument("--models", type=str, choices=["bert", "others", "match_lstm","mp", "conv_knrm","all"], default="all")
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
     parser.add_argument("--repeat", type=int, default=5)
@@ -44,11 +44,13 @@ def main():
     if args.models == "bert":
         model_classes = [mz.models.Bert]
     elif args.models == "others":
-        model_classes = [mz.models.MatchPyramid, mz.models.ConvKNRM]
+        model_classes = [mz.models.MatchPyramid, mz.models.ConvKNRM, mz.models.MatchLSTM]
     elif args.models == "conv_knrm":
         model_classes = [mz.models.ConvKNRM]
     elif args.models == "match_lstm":
         model_classes = [mz.models.MatchLSTM]
+    elif args.models == "mp":
+        model_classes = [mz.models.MatchPyramid]
     else:
         model_classes = [mz.models.Bert, mz.models.MatchLSTM, mz.models.ConvKNRM]
 

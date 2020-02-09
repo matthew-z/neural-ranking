@@ -67,7 +67,7 @@ def get_params(model_name):
     elif model_name=="bert":
         d = get_bert_arguments()
     else:
-        raise ValueError()
+        d = get_basic_arguments()
 
     for items in product(*d.values()):
         res = {}

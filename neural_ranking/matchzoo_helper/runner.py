@@ -1,10 +1,9 @@
 import gc
 import os
 from pathlib import Path
-
+import copy
 import numpy as np
 import torch
-from comet_ml import Experiment
 
 import matchzoo as mz
 from neural_ranking.data.callbacks import InsertQueryToDoc
@@ -255,13 +254,23 @@ class Runner(object):
             sort=False,
         )
         train_loader = self.dataloader_builder.build(trainset)
+
+        eval_dataset_kwargs = copy.copy(self.dataset_builder._kwargs)
+        eval_dataset_kwargs["batch_size"] = batch_size * 2
+        eval_dataset_kwargs["shuffle"] = False
+        eval_dataset_kwargs["sort"] =False
+        eval_dataset_kwargs["resample"] = False
+        eval_dataset_kwargs["mode"] = "point"
+
+        if configs["data_aug"] > 0:
+            max_length = 492 if self.model_class == mz.models.Bert else 1024
+            existing_callbacks = eval_dataset_kwargs["callbacks"]
+            if existing_callbacks is None:
+                existing_callbacks = []
+            existing_callbacks.insert(0, InsertQueryToDoc(ratio=configs["data_aug"], max_length=max_length))
+
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
-            batch_size=batch_size * 2,
-            shuffle=False,
-            sort=False,
-            resample=False,
-            mode="point",
-            callbacks = self.dataset_builder._kwargs.get("callbacks")
+            **eval_dataset_kwargs,
         )
         dev_dataset = eval_dataset_builder.build(self.dataset.dev_pack_processed)
         dev_loader = self.dataloader_builder.build(dataset=dev_dataset,
