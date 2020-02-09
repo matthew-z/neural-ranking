@@ -1,5 +1,6 @@
 import logging
 import os
+from itertools import product
 
 import comet_ml
 import torch
@@ -9,7 +10,6 @@ from neural_ranking.dataset.asr.asr_collection import AsrCollection
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
 from neural_ranking.matchzoo_helper.runner import Runner
 from scripts.robustness.train import multi_gpu
-from itertools import product
 
 
 def parse_args():
@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
-    parser.add_argument("--models", type=str, choices=["bert", "match_lstm", "conv_knrm"],
+    parser.add_argument("--models", type=str, choices=["bert", "drmm", "mp", "match_lstm", "conv_knrm"],
                         default="all")
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
 
@@ -35,22 +35,28 @@ def parse_args():
 def get_lstm_arguments():
     return {
         "rnn_type": ["lstm", "gru"],
-        "hidden_size": [128, 256, 512],
-        "lstm_layer": [1,2,3],
-        "lr":[1e-3, 1e-4]
+        "hidden_size": [64, 128, 256, 512],
+        "lstm_layer": [4,2,1],
+        "lr": [1e-3, 1e-4]
     }
 
 
 def get_ConvKNRM_arguments():
     return {
-        "filters": [128, 256, 512],
-        "lr":[1e-3, 1e-4],
-        "max_ngram": [1,2,3]
+        "filters": [64, 128, 256, 512],
+        "lr": [1e-3, 1e-4],
+        "max_ngram": [1, 2, 3]
     }
 
 def get_bert_arguments():
     return {
         "lr":[1e-3, 1e-4],
+    }
+
+
+def get_basic_arguments():
+    return {
+        "lr": [1e-3, 1e-4],
     }
 
 def get_params(model_name):
@@ -80,12 +86,18 @@ def main():
                     log_path=args.log_path,
                     dataset=dataset,
                     fp16=args.fp16)
+
+
     if args.models == "bert":
         model_class = mz.models.Bert
     elif args.models == "conv_knrm":
         model_class = mz.models.ConvKNRM
     elif args.models == "match_lstm":
         model_class = mz.models.MatchLSTM
+    elif args.models == "drmm":
+        model_class = mz.models.DRMM
+    elif args.models == "mp":
+        model_class = mz.models.MatchPyramid
     else:
         raise ValueError("invalid model class")
 

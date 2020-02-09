@@ -249,17 +249,10 @@ class Runner(object):
         training_pack = self.dataset.train_pack_processed
         # Setup data
         batch_size = configs.get("batch_size")
-        if configs["data_aug"] > 0:
-            max_length = 492 if self.model_class == mz.models.Bert else 1024
-            callbacks = [InsertQueryToDoc(ratio=configs["data_aug"], max_length=max_length)]
-        else:
-            callbacks = None
-
         trainset = self.dataset_builder.build(
             training_pack,
             batch_size=batch_size,
             sort=False,
-            callbacks=callbacks
         )
         train_loader = self.dataloader_builder.build(trainset)
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
@@ -267,7 +260,8 @@ class Runner(object):
             shuffle=False,
             sort=False,
             resample=False,
-            mode="point"
+            mode="point",
+            callbacks = self.dataset_builder._kwargs.get("callbacks")
         )
         dev_dataset = eval_dataset_builder.build(self.dataset.dev_pack_processed)
         dev_loader = self.dataloader_builder.build(dataset=dev_dataset,

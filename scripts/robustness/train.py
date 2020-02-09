@@ -44,7 +44,7 @@ def main():
     if args.models == "bert":
         model_classes = [mz.models.Bert]
     elif args.models == "others":
-        model_classes = [mz.models.MatchLSTM, mz.models.ConvKNRM]
+        model_classes = [mz.models.MatchPyramid, mz.models.ConvKNRM]
     elif args.models == "conv_knrm":
         model_classes = [mz.models.ConvKNRM]
     elif args.models == "match_lstm":
