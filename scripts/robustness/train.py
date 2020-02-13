@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
     parser.add_argument("--repeat", type=int, default=5)
+    parser.add_argument("--resume-index", type=int, default=0)
 
     args = parser.parse_args()
     return args
@@ -67,9 +68,14 @@ def main():
     else:
         raise ValueError("Incorrect Exp Value: %s" % args.exp)
 
+    resume_index = int(args.resume_index)
+    i = 0
     for _ in range(args.repeat):
+        if i < resume_index:
+            continue
         for e in exp:
             e(*exp_args)
+            i += 1
 
 
 def multi_gpu(gpu_num=1):
