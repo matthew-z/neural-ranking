@@ -81,7 +81,7 @@ def multi_gpu(gpu_num=1):
 
 def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
-        for weight_decay in [0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20]:
+        for weight_decay in [0.0001, 0.001,0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
