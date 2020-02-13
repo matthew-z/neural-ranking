@@ -1,1 +1,1 @@
-from .msmacro import MsMacroDocReRankDataset, MsMacroDocTriplesDataset
+from neural_ranking.dataset import msmacro

@@ -1,6 +1,4 @@
 import itertools
-from pprint import pprint
-
 from .rbo import rbo
 
 

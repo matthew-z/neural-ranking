@@ -1,2 +1,1 @@
-from .matchzoo_helper import *
-from .dataset import *
+from neural_ranking import data, dataset, matchzoo_helper, embedding, evaluation, utils
