@@ -26,7 +26,6 @@ def parse_args():
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
     parser.add_argument("--repeat", type=int, default=5)
-    parser.add_argument("--resume-index", type=int, default=0)
 
     args = parser.parse_args()
     return args
@@ -68,13 +67,9 @@ def main():
     else:
         raise ValueError("Incorrect Exp Value: %s" % args.exp)
 
-    resume_index = int(args.resume_index)
-    i = 0
     for _ in range(args.repeat):
         for e in exp:
-            if i >= resume_index:
-                e(*exp_args, index=i)
-            i += 1
+            e(*exp_args)
 
 
 def multi_gpu(gpu_num=1):
@@ -84,7 +79,7 @@ def multi_gpu(gpu_num=1):
         return [torch.device('cuda:%d' % i) for i in range(gpu_num)]
 
 
-def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner, index=0):
+def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
         for weight_decay in [0.0001, 0.001,0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
@@ -92,7 +87,6 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner, index
                                       log_env_cpu=False)
             exp.add_tag("%s" % model_class.__name__)
             exp.add_tag("weight_decay")
-            exp.log_metric("index", index)
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
@@ -117,7 +111,6 @@ def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, index=0):
                                       log_env_cpu=False)
             exp.add_tag("%s" % model_class.__name__)
             exp.add_tag("dropout")
-            exp.log_metric("index", index)
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
@@ -141,7 +134,6 @@ def data_aug_exp(args, asrc, embedding, model_classes, runner: Runner, index=0):
                                       workspace="Robustness",
                                       log_env_cpu=False)
             exp.add_tag("%s" % model_class.__name__)
-            exp.log_metric("index", index)
             exp.add_tag("aug")
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
