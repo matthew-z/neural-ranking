@@ -71,10 +71,9 @@ def main():
     resume_index = int(args.resume_index)
     i = 0
     for _ in range(args.repeat):
-        if i < resume_index:
-            continue
         for e in exp:
-            e(*exp_args, index=i)
+            if i >= resume_index:
+                e(*exp_args, index=i)
             i += 1
 
 
