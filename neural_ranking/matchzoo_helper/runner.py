@@ -116,7 +116,7 @@ class Runner(object):
         self._log_hparams(configs)
         self._log_hparams(self.model._params.to_dict())
 
-        run_name = run_name or self._get_default_run_name(configs)
+        run_name = run_name or self._get_default_run_name()
         train_loader, dev_loader = self.get_dataloaders(configs)
 
         if optimizer_fn:
@@ -139,7 +139,8 @@ class Runner(object):
         model_norm, embedding_norm = calculate_model_norm(self.model)
         self.logger.log_metric(name="model_norm_untrained", value=model_norm)
         self.logger.log_metric(name="embedding_norm_untrained", value=embedding_norm)
-
+        if self.fp16:
+            print("Enable Fp16")
         self.trainer = ReRankTrainer(
             model=self.model,
             optimizer=optimizer,
@@ -240,8 +241,8 @@ class Runner(object):
             "embedding_weight_decay": None
         }
 
-    def _get_default_run_name(self, configs):
-        name = [self.model_class.__name__]
+    def _get_default_run_name(self):
+        name = [self.model_class.__name__, self.logger.get_key()]
         return ".".join(name)
 
     def get_dataloaders(self, configs):

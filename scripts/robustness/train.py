@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
-    parser.add_argument("--models", type=str, choices=["bert", "others", "match_lstm","mp", "conv_knrm","all"], default="all")
+    parser.add_argument("--model", type=str, choices=["bert", "others", "match_lstm","mp", "conv_knrm","all"], default="all")
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
     parser.add_argument("--repeat", type=int, default=5)
@@ -41,15 +41,15 @@ def main():
                     log_path=args.log_path,
                     dataset=dataset,
                     fp16=args.fp16)
-    if args.models == "bert":
+    if args.model == "bert":
         model_classes = [mz.models.Bert]
-    elif args.models == "others":
+    elif args.model == "others":
         model_classes = [mz.models.MatchPyramid, mz.models.ConvKNRM, mz.models.MatchLSTM]
-    elif args.models == "conv_knrm":
+    elif args.model == "conv_knrm":
         model_classes = [mz.models.ConvKNRM]
-    elif args.models == "match_lstm":
+    elif args.model == "match_lstm":
         model_classes = [mz.models.MatchLSTM]
-    elif args.models == "mp":
+    elif args.model == "mp":
         model_classes = [mz.models.MatchPyramid]
     else:
         model_classes = [mz.models.Bert, mz.models.MatchLSTM, mz.models.ConvKNRM]
@@ -103,7 +103,7 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
             runner.free_memory()
 
 
-def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, index=0):
+def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, ):
     for model_class in model_classes:
         for dropout in [0, 0.1, 0.3, 0.5, 0.7]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
@@ -127,7 +127,7 @@ def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, index=0):
             runner.free_memory()
 
 
-def data_aug_exp(args, asrc, embedding, model_classes, runner: Runner, index=0):
+def data_aug_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
         for data_aug in [0.1, 0.3, 0.5]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
