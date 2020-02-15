@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument("--gpu-num", type=int, default=1)
+    parser.add_argument("--checkpoint-path", type=path, default="checkpoint")
     parser.add_argument("--model", type=str, choices=["bert", "others", "match_lstm","mp", "conv_knrm","all"], default="all")
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
@@ -39,6 +40,7 @@ def main():
     runner = Runner(embedding=embedding,
                     preprocessor_path=args.saved_preprocessor,
                     log_path=args.log_path,
+                    checkpoint_path=args.checkpoint_path,
                     dataset=dataset,
                     fp16=args.fp16)
     if args.model == "bert":
