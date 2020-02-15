@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
     parser.add_argument("--repeat", type=int, default=2)
-
+    parser.add_argument("--batch-accumulation", type=int, default=1)
     args = parser.parse_args()
     return args
 
@@ -103,7 +103,8 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
                 batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
-                clip_norm=10
+                clip_norm=10,
+                batch_accumulation=args.batch_accumulation
             )
             runner.eval_asrc(asrc)
             runner.free_memory()
@@ -131,8 +132,8 @@ def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, ):
                 batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
-                clip_norm=10
-
+                clip_norm=10,
+                batch_accumulation=args.batch_accumulation
             )
             runner.eval_asrc(asrc)
             runner.free_memory()

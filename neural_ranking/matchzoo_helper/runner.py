@@ -155,7 +155,8 @@ class Runner(object):
             device=devices or "cuda",
             save_dir=save_dir,
             fp16=self.fp16,
-            clip_norm=configs.get("clip_norm")
+            clip_norm=configs.get("clip_norm"),
+            batch_accumulation=configs.get("batch_accumulation")
         )
 
         if train:
@@ -243,7 +244,8 @@ class Runner(object):
             "weight_decay": 0,
             "data_aug": 0,
             "embedding_weight_decay": None,
-            "clip_norm": None
+            "clip_norm": None,
+            "batch_accumulation":1
         }
 
     def _get_default_run_name(self):
