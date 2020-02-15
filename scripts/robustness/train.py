@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument("--log-path", type=path, default="robustness_log")
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--fp16", action='store_true')
+    parser.add_argument("--batch-size", default=None, type=int)
     parser.add_argument("--gpu-num", type=int, default=1)
     parser.add_argument("--checkpoint-path", type=path, default="checkpoint")
     parser.add_argument("--model", type=str, choices=["bert", "others", "match_lstm","mp", "conv_knrm","all"], default="all")
@@ -91,7 +92,10 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
-            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
+            if args.batch_size:
+                batch_size = args.batch_size
+            else:
+                batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
                 epochs=3 if args.test else 10,
                 weight_decay=weight_decay,
@@ -116,7 +120,10 @@ def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, ):
             exp.log_parameter("embedding_name", str(embedding))
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
-            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
+            if args.batch_size:
+                batch_size = args.batch_size
+            else:
+                batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
                 epochs=3 if args.test else 10,
                 dropout=dropout,
