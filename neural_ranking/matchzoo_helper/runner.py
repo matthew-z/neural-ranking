@@ -1,12 +1,12 @@
+import copy
 import gc
 import os
 from pathlib import Path
-import copy
+
 import numpy as np
 import torch
 
 import matchzoo as mz
-from neural_ranking.data.callbacks import InsertQueryToDoc
 from neural_ranking.dataset.asr.asr_collection import AsrCollection
 from neural_ranking.evaluation import robustness
 from neural_ranking.matchzoo_helper.dataset import ReRankDataset
@@ -15,7 +15,7 @@ from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_r
 
 def calculate_model_norm(model):
     no_decay = ['bias', 'LayerNorm.weight']
-    total_norm = 0
+    model_norm = 0
     embedding_norm = 0
     for name, param in model.named_parameters():
 
@@ -24,11 +24,11 @@ def calculate_model_norm(model):
         elif "embedding" in name:
             embedding_norm += (param.data.norm(2)) ** 2
         else:
-            total_norm += (param.data.norm(2)) ** 2
-
-    total_norm = (total_norm ** (1 / 2)).item()
+            model_norm += (param.data.norm(2)) ** 2
+    total_norm = ((model_norm + embedding_norm) ** (1 / 2)).item()
+    model_norm = (model_norm ** (1 / 2)).item()
     embedding_norm = (embedding_norm ** (1 / 2)).item()
-    return total_norm, embedding_norm
+    return total_norm, model_norm, embedding_norm
 
 
 
@@ -136,9 +136,11 @@ class Runner(object):
 
         save_dir = save_dir or self.checkpoint_path.joinpath(run_name)
         os.makedirs(save_dir, exist_ok=True)
-        model_norm, embedding_norm = calculate_model_norm(self.model)
+        total_norm, model_norm, embedding_norm = calculate_model_norm(self.model)
         self.logger.log_metric(name="model_norm_untrained", value=model_norm)
         self.logger.log_metric(name="embedding_norm_untrained", value=embedding_norm)
+        self.logger.log_metric(name="total_norm_trained", value=total_norm)
+
         if self.fp16:
             print("Enable Fp16")
         self.trainer = ReRankTrainer(
@@ -152,7 +154,8 @@ class Runner(object):
             patience=configs.get("patience"),
             device=devices or "cuda",
             save_dir=save_dir,
-            fp16=self.fp16
+            fp16=self.fp16,
+            clip_norm=configs.get("clip_norm")
         )
 
         if train:
@@ -161,12 +164,13 @@ class Runner(object):
         # Restore the best model according to the dev scores.
         self.trainer.restore_model(save_dir.joinpath('model.pt'))
         dev_score = self.trainer.evaluate(dev_loader)
-        model_norm, embedding_norm = calculate_model_norm(self.model)
+        total_norm, model_norm, embedding_norm = calculate_model_norm(self.model)
+        self.logger.log_metric(name="total_norm_trained", value=total_norm)
         self.logger.log_metric(name="model_norm_trained", value=model_norm)
         self.logger.log_metric(name="embedding_norm_trained", value=embedding_norm)
 
         if self.logger:
-            self.logger.log_metrics({str(metric):score for metric, score in dev_score.items()}, prefix="dev__")
+            self.logger.log_metrics({str(metric): score for metric, score in dev_score.items()}, prefix="dev__")
 
     def predict(self, data_pack, batch_size=32):
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
@@ -238,7 +242,8 @@ class Runner(object):
             "batch_size": 64,
             "weight_decay": 0,
             "data_aug": 0,
-            "embedding_weight_decay": None
+            "embedding_weight_decay": None,
+            "clip_norm": None
         }
 
     def _get_default_run_name(self):
@@ -259,16 +264,16 @@ class Runner(object):
         eval_dataset_kwargs = copy.copy(self.dataset_builder._kwargs)
         eval_dataset_kwargs["batch_size"] = batch_size * 2
         eval_dataset_kwargs["shuffle"] = False
-        eval_dataset_kwargs["sort"] =False
+        eval_dataset_kwargs["sort"] = False
         eval_dataset_kwargs["resample"] = False
         eval_dataset_kwargs["mode"] = "point"
 
-        if configs["data_aug"] > 0:
-            max_length = 492 if self.model_class == mz.models.Bert else 1024
-            existing_callbacks = eval_dataset_kwargs["callbacks"]
-            if existing_callbacks is None:
-                existing_callbacks = []
-            existing_callbacks.insert(0, InsertQueryToDoc(ratio=configs["data_aug"], max_length=max_length))
+        # if configs["data_aug"] > 0:
+        #     max_length = 492 if self.model_class == mz.models.Bert else 1024
+        #     existing_callbacks = eval_dataset_kwargs["callbacks"]
+        #     if existing_callbacks is None:
+        #         existing_callbacks = []
+        #     existing_callbacks.insert(0, InsertQueryToDoc(ratio=configs["data_aug"], max_length=max_length))
 
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
             **eval_dataset_kwargs,

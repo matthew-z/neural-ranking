@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument("--model", type=str, choices=["bert", "others", "match_lstm","mp", "conv_knrm","all"], default="all")
     parser.add_argument("--exp", type=str, default="all", choices=["all", "dropout", "weight_decay", "data_aug"])
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
-    parser.add_argument("--repeat", type=int, default=5)
+    parser.add_argument("--repeat", type=int, default=2)
 
     args = parser.parse_args()
     return args
@@ -57,13 +57,12 @@ def main():
     exp_args = args, asrc, embedding, model_classes, runner
 
     if args.exp == "all":
-        exp = [dropout_exp, weight_decay_exp, data_aug_exp]
+        exp = [dropout_exp, weight_decay_exp]
     elif args.exp == "dropout":
         exp = [dropout_exp]
     elif args.exp == "weight_decay":
         exp = [weight_decay_exp]
-    elif args.exp == "data_aug":
-        exp = [data_aug_exp]
+
     else:
         raise ValueError("Incorrect Exp Value: %s" % args.exp)
 
@@ -81,7 +80,7 @@ def multi_gpu(gpu_num=1):
 
 def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
-        for weight_decay in [0.0001, 0.001,0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.20]:
+        for weight_decay in [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1 ]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
@@ -92,12 +91,13 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
             runner.logger = exp
             batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
-                epochs=3 if args.test else 20,
+                epochs=3 if args.test else 10,
                 weight_decay=weight_decay,
                 optimizer_cls=torch.optim.AdamW,
                 batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
-                devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
+                devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
+                clip_norm=10
             )
             runner.eval_asrc(asrc)
             runner.free_memory()
@@ -116,39 +116,41 @@ def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, ):
             runner.logger = exp
             batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
             runner.train(
-                epochs=3 if args.test else 20,
+                epochs=3 if args.test else 10,
                 dropout=dropout,
                 dropout_rate=dropout,
                 batch_size=batch_size,
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
-                devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1)
-            )
-            runner.eval_asrc(asrc)
-            runner.free_memory()
-
-
-def data_aug_exp(args, asrc, embedding, model_classes, runner: Runner):
-    for model_class in model_classes:
-        for data_aug in [0.1, 0.3, 0.5]:
-            exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
-                                      workspace="Robustness",
-                                      log_env_cpu=False)
-            exp.add_tag("%s" % model_class.__name__)
-            exp.add_tag("aug")
-            exp.log_parameter("embedding_name", str(embedding))
-            runner.prepare(model_class, extra_terms=asrc._terms)
-            runner.logger = exp
-            batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 3 * args.gpu_num
-            runner.train(
-                epochs=3 if args.test else 20,
-                min_epochs=1 if args.test else 10,
-                batch_size=batch_size,
-                lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
-                data_aug=data_aug
+                clip_norm=10
+
             )
             runner.eval_asrc(asrc)
             runner.free_memory()
+#
+#
+# def data_aug_exp(args, asrc, embedding, model_classes, runner: Runner):
+#     for model_class in model_classes:
+#         for data_aug in [0.1, 0.3, 0.5]:
+#             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
+#                                       workspace="Robustness",
+#                                       log_env_cpu=False)
+#             exp.add_tag("%s" % model_class.__name__)
+#             exp.add_tag("aug")
+#             exp.log_parameter("embedding_name", str(embedding))
+#             runner.prepare(model_class, extra_terms=asrc._terms)
+#             runner.logger = exp
+#             batch_size = 32 * args.gpu_num if model_class != mz.models.Bert else 2 * args.gpu_num
+#             runner.train(
+#                 epochs=3 if args.test else 20,
+#                 min_epochs=1 if args.test else 10,
+#                 batch_size=batch_size,
+#                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
+#                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
+#                 data_aug=data_aug
+#             )
+#             runner.eval_asrc(asrc)
+#             runner.free_memory()
 
 
 if __name__ == "__main__":

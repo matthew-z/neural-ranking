@@ -1,6 +1,5 @@
 import logging
 import os
-import functools
 import comet_ml
 import torch
 from test_tube import HyperOptArgumentParser
