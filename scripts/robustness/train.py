@@ -29,6 +29,8 @@ def parse_args():
     parser.add_argument("--saved-preprocessor", type=path, default="preprocessor")
     parser.add_argument("--repeat", type=int, default=2)
     parser.add_argument("--batch-accumulation", type=int, default=1)
+    parser.add_argument("--no-embedding-reg", action='store_true')
+
     args = parser.parse_args()
     return args
 
@@ -83,7 +85,7 @@ def multi_gpu(gpu_num=1):
 
 def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
     for model_class in model_classes:
-        for weight_decay in [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1 ]:
+        for weight_decay in [0.01, 0.05, 0.2, 0.4, 0.6, .8, 1.0, 0.1, 0.0001, 0.0005, 0.001, 0.005]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
@@ -104,7 +106,8 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
                 lr=3e-4 if model_class != mz.models.Bert else 3e-5,
                 devices=multi_gpu(args.gpu_num if model_class != mz.models.MatchLSTM else 1),
                 clip_norm=10,
-                batch_accumulation=args.batch_accumulation
+                batch_accumulation=args.batch_accumulation,
+                embedding_weight_decay=0 if args.no_embedding_reg else None
             )
             runner.eval_asrc(asrc)
             runner.free_memory()
@@ -112,7 +115,7 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
 
 def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, ):
     for model_class in model_classes:
-        for dropout in [0, 0.1, 0.3, 0.5, 0.7]:
+        for dropout in [0, 0.1, 0.2, 0.3, .4, 0.5,]:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)

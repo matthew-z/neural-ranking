@@ -127,7 +127,7 @@ class Runner(object):
                 {'params': [p for n, p in self.model.named_parameters() if (not any(nd in n for nd in no_decay) and "embedding" not in n)],
                  'weight_decay': configs["weight_decay"]},
                 {'params': [p for n, p in self.model.named_parameters() if (not any(nd in n for nd in no_decay) and "embedding"  in n)],
-                 'weight_decay': configs["embedding_weight_decay"] or configs["weight_decay"]},
+                 'weight_decay': configs["embedding_weight_decay"] if configs["embedding_weight_decay"] is not None else configs["weight_decay"] },
                 {'params': [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
                  'weight_decay': 0.0}
             ]
