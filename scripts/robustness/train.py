@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument("--repeat", type=int, default=2)
     parser.add_argument("--batch-accumulation", type=int, default=1)
     parser.add_argument("--no-embedding-reg", action='store_true')
+    parser.add_argument("--start", type=int, default=None)
+    parser.add_argument("--end", type=int, default=None)
 
     args = parser.parse_args()
     return args
@@ -59,7 +61,7 @@ def main():
     else:
         model_classes = [mz.models.Bert, mz.models.MatchLSTM, mz.models.ConvKNRM]
 
-    exp_args = args, asrc, embedding, model_classes, runner
+    exp_args = args, asrc, embedding, model_classes, runner, args.start, args.end
 
     if args.exp == "all":
         exp = [dropout_exp, weight_decay_exp]
@@ -83,15 +85,21 @@ def multi_gpu(gpu_num=1):
         return [torch.device('cuda:%d' % i) for i in range(gpu_num)]
 
 
-def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
+def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner, start=None, end=None):
     for model_class in model_classes:
-        for weight_decay in [0.01, 0.05, 0.2, 0.4, 0.6, .8, 1.0, 0.1, 0.0001, 0.0005, 0.001, 0.005]:
+        choices = [0.01, 0.05, 0.2, 0.4, 0.6, .8, 1.0, 0.1, 0.0001, 0.0005, 0.001, 0.005]
+        if start is None:
+            choices = choices
+        else:
+            choices = choices[start:end]
+        for weight_decay in choices:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
             exp.add_tag("%s" % model_class.__name__)
             exp.add_tag("weight_decay")
             exp.log_parameter("embedding_name", str(embedding))
+            print("Weight Decay: %d" % weight_decay)
             runner.prepare(model_class, extra_terms=asrc._terms)
             runner.logger = exp
             if args.batch_size:
@@ -113,9 +121,14 @@ def weight_decay_exp(args, asrc, embedding, model_classes, runner: Runner):
             runner.free_memory()
 
 
-def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, ):
+def dropout_exp(args, asrc, embedding, model_classes, runner: Runner, start=None, end=None ):
     for model_class in model_classes:
-        for dropout in [0, 0.1, 0.2, 0.3, .4, 0.5,]:
+        choices = [0, 0.1, 0.2, 0.3, .4, 0.5,]
+        if start is None:
+            choices = choices
+        else:
+            choices = choices[start:end]
+        for dropout in choices:
             exp = comet_ml.Experiment(project_name="ASR" if not args.test else "ASR-test",
                                       workspace="Robustness",
                                       log_env_cpu=False)
