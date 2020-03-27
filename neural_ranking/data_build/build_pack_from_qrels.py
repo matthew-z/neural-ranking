@@ -19,7 +19,7 @@ import pandas as pd
 import tqdm
 from jnius import autoclass
 
-from neural_ranking.data.topic_readers import TrecRobustTopicReader, \
+from neural_ranking.data_build.topic_readers import TrecRobustTopicReader, \
     NtcirTopicReader, TopicReader, TrecXmlTopicReader
 
 JString = autoclass('java.lang.String')

@@ -4,7 +4,7 @@ import os
 import json
 from pathlib import Path
 
-from neural_ranking.data.build_pack_from_qrels import TrecDataBuilder, NtcirDataBuilder, TrecXmlBuilder
+from neural_ranking.data_build.build_pack_from_qrels import TrecDataBuilder, NtcirDataBuilder, TrecXmlBuilder
 
 
 def path(str):

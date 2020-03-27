@@ -5,8 +5,8 @@ from pathlib import Path
 import torch
 
 import matchzoo as mz
-from neural_ranking.matchzoo_helper.dataset import ReRankDataset
-from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_ranking_task
+from neural_ranking.runners.dataset import ReRankDataset
+from neural_ranking.runners.utils import dict_mean, ReRankTrainer, get_ranking_task
 
 
 class Runner(object):

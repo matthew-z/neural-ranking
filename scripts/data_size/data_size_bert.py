@@ -5,8 +5,8 @@ import pickle
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 import matchzoo as mz
-from neural_ranking.matchzoo_helper.datasize_runner import Runner
-from neural_ranking.matchzoo_helper.dataset import  ReRankDataset
+from neural_ranking.runners.datasize_runner import Runner
+from neural_ranking.runners.dataset import  ReRankDataset
 
 def path(str):
     return os.path.abspath((os.path.expanduser(str)))

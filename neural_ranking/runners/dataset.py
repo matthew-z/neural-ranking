@@ -4,7 +4,7 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 
 import matchzoo as mz
-from neural_ranking.matchzoo_helper.utils import folds_to_kfolds
+from neural_ranking.runners.utils import folds_to_kfolds
 from neural_ranking.utils.common import split_topics, slice_datapack_by_left_ids, get_kfold_topics
 
 PROJECT_FOLDER = Path("~/ir/neural_ranking/neural_ranking").expanduser()

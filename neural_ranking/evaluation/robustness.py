@@ -62,6 +62,11 @@ class RBO(RobustnessMetric):
         else:
             return res.ext
 
+
+class iRBO(RBO):
+    def call(self, doc_list1, doc_list2):
+        return 1- super().call(doc_list1, doc_list2)
+
 def get_robustness_metrics():
     return {
         "TopChange": TopChange(),

@@ -1,0 +1,1 @@
+from neural_ranking.data_loader import msmacro

@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from neural_ranking.data.topic_readers import *
+from neural_ranking.data_build.topic_readers import *
 
 
 class TestTrecTopicReader(TestCase):

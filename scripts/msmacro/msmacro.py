@@ -12,7 +12,7 @@ from transformers import get_linear_schedule_with_warmup
 
 import matchzoo as mz
 import pytorch_lightning as pl
-from neural_ranking.dataset.msmacro import MsMacroDocTriplesDataset, MsMacroDocReRankDataset
+from neural_ranking.data_loader.msmacro import MsMacroDocTriplesDataset, MsMacroDocReRankDataset
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.logging import TensorBoardLogger

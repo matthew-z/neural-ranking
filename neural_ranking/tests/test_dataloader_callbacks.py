@@ -1,5 +1,5 @@
 import matchzoo as mz
-from neural_ranking.data.callbacks import InsertQueryToDoc
+from neural_ranking.data_build.callbacks import InsertQueryToDoc
 
 
 def test_attach_query():

@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from neural_ranking.data.build_pack_from_qrels import TrecDataBuilder
+from neural_ranking.data_build.build_pack_from_qrels import TrecDataBuilder
 
 
 class TestTrecDataBuilder(TestCase):

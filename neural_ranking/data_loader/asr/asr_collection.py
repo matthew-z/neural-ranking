@@ -4,7 +4,7 @@ import bs4
 import pandas as pd
 
 import matchzoo as mz
-from neural_ranking.data.topic_readers import TrecXmlTopicReader
+from neural_ranking.data_build.topic_readers import TrecXmlTopicReader
 
 class AsrCollection(object):
     def __init__(self, folder_path, topic_path):

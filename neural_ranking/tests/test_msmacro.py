@@ -2,8 +2,7 @@ from pathlib import Path
 
 from torch.utils import data
 
-from neural_ranking.dataset import MsMacroDocTriplesDataset, MsMacroDocReRankDataset
-from tqdm import tqdm
+from neural_ranking.data_loader.msmacro import MsMacroDocTriplesDataset, MsMacroDocReRankDataset
 
 
 def test_masmacro():

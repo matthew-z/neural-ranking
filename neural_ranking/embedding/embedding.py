@@ -1,2 +1,0 @@
-class TokenEmbedding(object):
-    pass

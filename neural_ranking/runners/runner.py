@@ -7,10 +7,10 @@ import numpy as np
 import torch
 
 import matchzoo as mz
-from neural_ranking.dataset.asr.asr_collection import AsrCollection
+from neural_ranking.data_loader.asr.asr_collection import AsrCollection
 from neural_ranking.evaluation import robustness
-from neural_ranking.matchzoo_helper.dataset import ReRankDataset
-from neural_ranking.matchzoo_helper.utils import dict_mean, ReRankTrainer, get_ranking_task
+from neural_ranking.runners.dataset import ReRankDataset
+from neural_ranking.runners.utils import dict_mean, ReRankTrainer, get_ranking_task
 
 
 def calculate_model_norm(model):
@@ -269,13 +269,6 @@ class Runner(object):
         eval_dataset_kwargs["sort"] = False
         eval_dataset_kwargs["resample"] = False
         eval_dataset_kwargs["mode"] = "point"
-
-        # if configs["data_aug"] > 0:
-        #     max_length = 492 if self.model_class == mz.models.Bert else 1024
-        #     existing_callbacks = eval_dataset_kwargs["callbacks"]
-        #     if existing_callbacks is None:
-        #         existing_callbacks = []
-        #     existing_callbacks.insert(0, InsertQueryToDoc(ratio=configs["data_aug"], max_length=max_length))
 
         eval_dataset_builder = mz.dataloader.DatasetBuilder(
             **eval_dataset_kwargs,

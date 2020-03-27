@@ -5,9 +5,9 @@ import torch
 from test_tube import HyperOptArgumentParser
 
 import matchzoo as mz
-from neural_ranking.dataset.asr.asr_collection import AsrCollection
-from neural_ranking.matchzoo_helper.dataset import ReRankDataset
-from neural_ranking.matchzoo_helper.runner import Runner
+from neural_ranking.data_loader.asr.asr_collection import AsrCollection
+from neural_ranking.runners.dataset import ReRankDataset
+from neural_ranking.runners.runner import Runner
 
 
 def parse_args():
