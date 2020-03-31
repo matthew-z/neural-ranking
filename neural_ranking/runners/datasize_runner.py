@@ -46,7 +46,7 @@ class Runner(object):
         )
 
         if update_preprocessor:
-            self.dataset.set_preprocessor(self.preprocessor)
+            self.dataset.apply_preprocessor(self.preprocessor)
 
     def reset_model(self):
         self.model = self.model_class(params=self.model._params)

@@ -50,6 +50,7 @@ class Runner(object):
         self.checkpoint_path = Path(checkpoint_path).absolute()
         self.log_path = Path(log_path).absolute()
         self.preprocessor_path = preprocessor_path
+        self.logger = None
 
     def _log_hparams(self, configs):
         if self.logger:
@@ -95,7 +96,7 @@ class Runner(object):
         )
         if update_preprocessor:
             print("Transform dataset" )
-            self.dataset.set_preprocessor(self.preprocessor)
+            self.dataset.apply_preprocessor(self.preprocessor)
         if save_path and self.model_class != mz.models.Bert and not self.dataset.debug_mode:
             preprocessor.fit = lambda *args, **argv: None
             self.preprocessor.save(save_path)

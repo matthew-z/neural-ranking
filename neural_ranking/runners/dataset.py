@@ -35,7 +35,7 @@ class ReRankDataset(object):
         self.rerank_pack_processed = None
         self.pack_processed = None
 
-    def set_preprocessor(self, preprocessor):
+    def apply_preprocessor(self, preprocessor):
         self.pack_processed = preprocessor.transform(
             self.pack)
         self.rerank_pack_processed = preprocessor.transform(
