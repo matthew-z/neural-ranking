@@ -1,4 +1,4 @@
-matchzoo-py
+-e git://github.com/matthew-z/MatchZoo-py.git#egg=matchzoo-py
 beautifulsoup4
 transformers
 pandas
