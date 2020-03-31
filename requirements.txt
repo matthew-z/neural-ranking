@@ -5,3 +5,4 @@ pandas
 pyserini
 tqdm
 sklearn
+numpy
