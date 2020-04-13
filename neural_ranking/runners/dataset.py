@@ -7,8 +7,8 @@ import matchzoo as mz
 from neural_ranking.runners.utils import folds_to_kfolds
 from neural_ranking.utils.common import split_topics, slice_datapack_by_left_ids, get_kfold_topics
 
-PROJECT_FOLDER = Path("~/ir/neural_ranking/neural_ranking").expanduser()
-DATA_FOLDER = Path("~/ir/neural_ranking/").expanduser().joinpath("built_data")
+PROJECT_FOLDER = Path("~/neural_ranking/neural_ranking").expanduser()
+DATA_FOLDER = Path("~/neural_ranking/").expanduser().joinpath("built_data")
 RESOURCES_FOLDER = PROJECT_FOLDER.joinpath("resources")
 
 
