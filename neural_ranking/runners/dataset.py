@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
@@ -7,8 +8,14 @@ import matchzoo as mz
 from neural_ranking.runners.utils import folds_to_kfolds
 from neural_ranking.utils.common import split_topics, slice_datapack_by_left_ids, get_kfold_topics
 
-PROJECT_FOLDER = Path("~/ir/neural_ranking/neural_ranking").expanduser()
-DATA_FOLDER = Path("~/ir/neural_ranking/").expanduser().joinpath("built_data")
+
+PROJECT_FOLDER = Path(__file__ + "/../..").resolve()  # Root path of module.
+DATA_FOLDER = os.getenv("DATA_FOLDER")
+if DATA_FOLDER:
+    DATA_FOLDER = Path(DATA_FOLDER).expanduser().resolve()
+else:
+    # Defaults to looking in the parent directory of PROJECT_FOLDER for a directory named `built_data`.
+    DATA_FOLDER = (PROJECT_FOLDER / Path('../built_data')).resolve() 
 RESOURCES_FOLDER = PROJECT_FOLDER.joinpath("resources")
 
 
