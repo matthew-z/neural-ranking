@@ -1,5 +1,4 @@
 import csv
-import gzip
 import os
 import subprocess
 
@@ -102,22 +101,37 @@ class MsMarcoPassageTriplesIterableDataset(data.IterableDataset):
 
 
 class MsMarcoPassageReRankDataset(data.Dataset):
-    def __init__(self, ms_marco_path):
+    def __init__(self, ms_marco_path, mode='dev'):
         self.ms_marco_path = ms_marco_path
-        self.top1000_path = os.path.join(ms_marco_path, "msmarco-passagetest2019-top1000.tsv.gz")
-        self.qrel_path = os.path.join(ms_marco_path, "2019qrels-pass.txt")
-        self._index = self.get_test_index()
+        self.mode = mode
+        if mode == 'dev':
+            self.top1000_path = os.path.join(ms_marco_path, "top1000.dev")
+            self.qrel_path = os.path.join(ms_marco_path, "qrels.dev.tsv")
+        else:
+            self.top1000_path = os.path.join(ms_marco_path, "msmarco-passagetest2019-top1000.tsv")
+            qrel_path = os.path.join(ms_marco_path, "2019qrels-pass.txt")
+            self.qrel_path = qrel_path if os.path.exists(qrel_path) else None
+        self._index = self.get_index()
 
-    def get_test_index(self):
-        rels = get_qrels(self.qrel_path)
+    def get_index(self):
+        rels = get_qrels(self.qrel_path) if self.qrel_path else None
+        d = get_top1000(self.top1000_path)
+        queries = d['queries']
+        passages = d['passages']
+        top1000 = d['top1000']
+
         index = []
-        with gzip.open(self.top1000_path, 'rt', encoding='utf-8') as f:
-            tsvreader = csv.reader(f, delimiter="\t")
-            for qid, pid, query, passage in tsvreader:
-                if qid not in rels:  # some queries not in qrels
-                    continue
-                label = rels[qid].get(pid, 0)
-                index.append((qid, pid, query, passage, label))
+        for qid, pids in top1000.items():
+            if (rels and qid not in rels) or len(pids) != 1000:
+                continue
+            query = queries[qid]
+            for pid in pids:
+                passage = passages[pid]
+                if rels:
+                    label = 1 if pid in rels[qid] else 0
+                    index.append((qid, pid, query, passage, label))
+                else:
+                    index.append((qid, pid, query, passage))
         return index
 
     def __getitem__(self, item):
@@ -134,8 +148,11 @@ class MsMarcoPassageReRankDataset(data.Dataset):
             fields = list(zip(*examples))
             if len(fields) == 5:
                 qid, pid, query, passage, labels = fields
+            elif len(fields) == 4:
+                qid, pid, query, passage = fields
+                labels = None
             else:
-                raise ValueError("incorrect length of fields, expected 3, found %d" % len(fields))
+                raise ValueError("incorrect length of fields, expected 4 or 5, found %d" % len(fields))
 
             x = self.encoder.batch_encode_plus(
                 zip(query, passage),
@@ -145,7 +162,9 @@ class MsMarcoPassageReRankDataset(data.Dataset):
                 pad_to_max_length=True,
                 truncation_strategy="only_second"
             )
-            return qid, pid, x, torch.LongTensor(labels)
+            if labels:
+                return qid, pid, x, torch.LongTensor(labels)
+            return qid, pid, x
 
 
 def get_triplet(path, idx):
@@ -158,16 +177,47 @@ def get_triplet(path, idx):
 
 
 def get_qrels(path):
-    """Read TREC-style qrel text file, returns a nested dict mapping qid to pid to rel score."""
-    rels = {}
+    """Read TREC-style qrel file, returns a nested dict mapping qid to pid to rel score."""
+    ext = os.path.splitext(path)[1]
+    res = {}
     with open(path) as f:
-        for line in f:
-            qid, _, pid, rel = line.split()
-            rel = int(rel)
-            if rel > 0:
-                rels.setdefault(qid, {}) 
-                rels[qid][pid] = rel
+        if ext == '.txt':
+            reader = map(lambda x: x.split(), f)
+        elif ext == '.tsv':
+            reader = csv.reader(f, delimiter='\t') 
+        else:
+            raise ValueError('Only txt or tsv allowed.')
+
+        rels = _get_qrels(reader)
     return rels
+
+
+def _get_qrels(it):
+    rels = {}
+    for qid, _, pid, rel in it:
+        rel = int(rel)
+        if rel > 0:
+            rels.setdefault(qid, set()) 
+            rels[qid].add(pid)
+    return rels
+
+
+def get_top1000(path):
+    top1000 = {}
+    passages = {}
+    queries = {}
+    with open(path) as f:
+        tsvreader = csv.reader(f, delimiter="\t")
+        for qid, pid, query, passage in tsvreader:
+            top1000.setdefault(qid, [])
+            top1000[qid].append(pid)
+            queries[qid] = query
+            passages[pid] = passage
+    return {
+            'top1000': top1000,
+            'passages': passages,
+            'queries': queries
+        }
 
 
 def get_line_nums_of_file(filepath):
