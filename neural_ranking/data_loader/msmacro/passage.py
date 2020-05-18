@@ -105,7 +105,7 @@ class MsMarcoPassageReRankDataset(data.Dataset):
         self.ms_marco_path = ms_marco_path
         self.mode = mode
         if mode == 'dev':
-            self.top1000_path = os.path.join(ms_marco_path, "top1000.dev")
+            self.top1000_path = os.path.join(ms_marco_path, "top1000.dev.small")
             self.qrel_path = os.path.join(ms_marco_path, "qrels.dev.tsv")
         else:
             self.top1000_path = os.path.join(ms_marco_path, "msmarco-passagetest2019-top1000.tsv")

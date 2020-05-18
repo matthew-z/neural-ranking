@@ -91,9 +91,9 @@ class MsMarcoPL(pl.LightningModule):
             evaluated += 1
             for metric_name, metric_fn in self.metrics.items():
                 result[metric_name].append(metric_fn(y_true=y_true, y_pred=y_pred))
-        
+
         for metric_name, values in result.items():
-            result[metric_name] = np.mean(values)
+            result[metric_name] = np.mean(values) if values else 0
 
         result['evaluated_topics'] = evaluated
         result['skipped_topics'] = skipped
@@ -107,8 +107,8 @@ class MsMarcoPL(pl.LightningModule):
         return list(self.validation_step(batch, batch_idx))
 
     def test_epoch_end(self, outputs):
-        if len(outputs) == 4:  # qrels are included
-            return self.validation_end(outputs)
+        if len(outputs[0][0]) == 4:  # qrels are included
+            return self.validation_epoch_end(outputs)
         topics = {}
         for qid, pid, y_pred in itertools.chain(*outputs):
             topics.setdefault(qid, {'pred': [], 'pid': []})
@@ -130,8 +130,8 @@ class MsMarcoPL(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        lr = 3e-6
-        num_training_steps = 200_000
+        lr = 1e-5
+        num_training_steps = 1_000_000
         num_warmup_steps = 10_000
         optimizer = transformers.AdamW(self.parameters(), lr=lr)
         scheduler = transformers.get_linear_schedule_with_warmup(
@@ -196,7 +196,7 @@ def main():
     )
     early_stop_callback = pl.callbacks.EarlyStopping(
             monitor=monitor,
-            patience=5,
+            patience=4,
             verbose=True,
             mode='max'
     )
@@ -216,12 +216,12 @@ def main():
     
     if not args.test:
         trainer = pl.Trainer(
-            max_epochs=1,  gpus=2,
+            gpus=3,
             gradient_clip_val=1, distributed_backend='ddp', use_amp=True,
             early_stop_callback=early_stop_callback,
             checkpoint_callback=checkpoint_callback, logger=logger,
             track_grad_norm=2, num_sanity_val_steps=25, accumulated_grad_batches=4,
-            resume_from_checkpoint=args.resume, val_check_interval=400_000, val_percent_check=0.1,
+            resume_from_checkpoint=args.resume, val_check_interval=200_000,
             replace_sampler_ddp=False
         )
         hparams = argparse.Namespace(
